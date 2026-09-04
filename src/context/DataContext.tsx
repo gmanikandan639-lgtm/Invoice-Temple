@@ -78,6 +78,18 @@ interface DataContextType {
 const DataContext = createContext<DataContextType | undefined>(undefined);
 
 const STORAGE_PREFIX = 'invoice_temple_';
+const CLEAN_SLATE_KEY = 'invoice_temple_cleared_dummy_records_v1';
+
+// Automatically purge legacy dummy invoices, payments, and details for a clean production start
+if (typeof window !== 'undefined' && !localStorage.getItem(CLEAN_SLATE_KEY)) {
+  localStorage.removeItem(STORAGE_PREFIX + 'invoices');
+  localStorage.removeItem(STORAGE_PREFIX + 'payments');
+  localStorage.removeItem(STORAGE_PREFIX + 'customers');
+  localStorage.removeItem(STORAGE_PREFIX + 'products');
+  localStorage.removeItem(STORAGE_PREFIX + 'notifications');
+  localStorage.removeItem(STORAGE_PREFIX + 'activity_logs');
+  localStorage.setItem(CLEAN_SLATE_KEY, 'true');
+}
 
 export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { currentUser } = useAuth();
@@ -664,12 +676,14 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setInvoices([]);
     setPayments([]);
     setActivityLogs([]);
+    setNotifications([]);
     saveLocal('customers', []);
     saveLocal('products', []);
     saveLocal('invoices', []);
     saveLocal('payments', []);
     saveLocal('activity_logs', []);
-    logActivity('Demo Data Cleared', 'System');
+    saveLocal('notifications', []);
+    logActivity('All Dummy Bills and Records Cleared', 'System');
   };
 
   const resetDemoData = () => {
