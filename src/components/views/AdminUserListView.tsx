@@ -102,22 +102,17 @@ export const AdminUserListView: React.FC<AdminUserListViewProps> = ({ onNavigate
         });
         showToast('User account updated successfully');
       } else {
-        if (!password || password.length < 6) {
-          showToast('Password must be at least 6 characters', 'error');
-          return;
-        }
-
         await addUser({
           uid: 'uid_' + Date.now().toString().slice(-6),
-          email,
-          name,
-          phone,
+          email: email.trim().toLowerCase(),
+          name: name.trim(),
+          phone: phone.trim(),
           role,
           status: 'active',
           createdAt: new Date().toISOString(),
           lastLogin: 'Never',
         });
-        showToast('New user account created successfully');
+        showToast('New user account added successfully. User can authenticate with Google Mail.');
       }
       setIsModalOpen(false);
     } catch (err: any) {
@@ -326,26 +321,27 @@ export const AdminUserListView: React.FC<AdminUserListViewProps> = ({ onNavigate
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-1">Email Address *</label>
+            <label className="block text-xs font-semibold text-slate-700 mb-1">Google Mail Address *</label>
             <input
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
               disabled={!!editingUser}
+              placeholder="e.g. employee@gmail.com"
               className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs disabled:bg-slate-100 disabled:text-slate-500"
             />
+            <p className="text-[10px] text-slate-400 mt-1">User can log in directly using Google Mail authentication.</p>
           </div>
 
           {!editingUser && (
             <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">Initial Password *</label>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">Optional Initial Password</label>
               <input
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                required
-                placeholder="At least 6 characters"
+                placeholder="Optional if signing in via Google"
                 className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs"
               />
             </div>

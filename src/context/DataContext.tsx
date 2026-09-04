@@ -5,6 +5,7 @@ import {
   Customer,
   Product,
   Invoice,
+  InvoiceStatus,
   Payment,
   UserProfile,
   AppNotification,
@@ -22,7 +23,8 @@ import {
   INITIAL_NOTIFICATIONS,
   INITIAL_ACTIVITY_LOGS,
 } from '../data/initialData';
-import { db, isConfigured, handleFirestoreError, OperationType } from '../lib/firebase';
+import { auth, db, isConfigured, handleFirestoreError, OperationType } from '../lib/firebase';
+import { onAuthStateChanged } from 'firebase/auth';
 import {
   collection,
   doc,
@@ -51,6 +53,7 @@ interface DataContextType {
   invoices: Invoice[];
   addInvoice: (invoiceData: Omit<Invoice, 'id' | 'createdAt' | 'updatedAt'>) => Promise<Invoice>;
   updateInvoice: (id: string, data: Partial<Invoice>) => Promise<void>;
+  updateInvoiceStatus: (id: string, status: InvoiceStatus, reason?: string) => Promise<void>;
   cancelInvoice: (id: string, reason?: string) => Promise<void>;
   payments: Payment[];
   addPayment: (paymentData: Omit<Payment, 'id' | 'createdAt'>) => Promise<Payment>;
@@ -128,95 +131,107 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     localStorage.setItem(STORAGE_PREFIX + key, JSON.stringify(data));
   };
 
-  // Real-time Firestore Listeners when connected
+  // Real-time Firestore Listeners when connected and authenticated
   useEffect(() => {
-    if (!isConfigured || !db) return;
+    if (!isConfigured || !db || !auth) return;
 
-    const unsubs: (() => void)[] = [];
+    let unsubs: (() => void)[] = [];
 
-    try {
-      // Invoices
-      const qInvoices = query(collection(db, 'invoices'), orderBy('createdAt', 'desc'));
-      const unsubInvoices = onSnapshot(
-        qInvoices,
-        (snapshot) => {
-          const list: Invoice[] = [];
-          snapshot.forEach((d) => list.push({ ...(d.data() as Invoice), id: d.id }));
-          if (list.length > 0) {
-            setInvoices(list);
-            saveLocal('invoices', list);
-          }
-        },
-        (err) => handleFirestoreError(err, OperationType.LIST, 'invoices')
-      );
-      unsubs.push(unsubInvoices);
+    const unsubscribeAuth = onAuthStateChanged(auth, (firebaseUser) => {
+      // Clean up prior listeners if user changes or signs out
+      unsubs.forEach((u) => u());
+      unsubs = [];
 
-      // Customers
-      const qCustomers = query(collection(db, 'customers'), orderBy('createdAt', 'desc'));
-      const unsubCustomers = onSnapshot(
-        qCustomers,
-        (snapshot) => {
-          const list: Customer[] = [];
-          snapshot.forEach((d) => list.push({ ...(d.data() as Customer), id: d.id }));
-          if (list.length > 0) {
-            setCustomers(list);
-            saveLocal('customers', list);
-          }
-        },
-        (err) => handleFirestoreError(err, OperationType.LIST, 'customers')
-      );
-      unsubs.push(unsubCustomers);
+      if (!firebaseUser) {
+        // When unauthenticated, do not query private Firestore collections
+        return;
+      }
 
-      // Products
-      const qProducts = query(collection(db, 'products'), orderBy('createdAt', 'desc'));
-      const unsubProducts = onSnapshot(
-        qProducts,
-        (snapshot) => {
-          const list: Product[] = [];
-          snapshot.forEach((d) => list.push({ ...(d.data() as Product), id: d.id }));
-          if (list.length > 0) {
-            setProducts(list);
-            saveLocal('products', list);
-          }
-        },
-        (err) => handleFirestoreError(err, OperationType.LIST, 'products')
-      );
-      unsubs.push(unsubProducts);
+      try {
+        // Invoices
+        const qInvoices = query(collection(db, 'invoices'), orderBy('createdAt', 'desc'));
+        const unsubInvoices = onSnapshot(
+          qInvoices,
+          (snapshot) => {
+            const list: Invoice[] = [];
+            snapshot.forEach((d) => list.push({ ...(d.data() as Invoice), id: d.id }));
+            if (list.length > 0) {
+              setInvoices(list);
+              saveLocal('invoices', list);
+            }
+          },
+          (err) => handleFirestoreError(err, OperationType.LIST, 'invoices')
+        );
+        unsubs.push(unsubInvoices);
 
-      // Payments
-      const qPayments = query(collection(db, 'payments'), orderBy('createdAt', 'desc'));
-      const unsubPayments = onSnapshot(
-        qPayments,
-        (snapshot) => {
-          const list: Payment[] = [];
-          snapshot.forEach((d) => list.push({ ...(d.data() as Payment), id: d.id }));
-          if (list.length > 0) {
-            setPayments(list);
-            saveLocal('payments', list);
-          }
-        },
-        (err) => handleFirestoreError(err, OperationType.LIST, 'payments')
-      );
-      unsubs.push(unsubPayments);
+        // Customers
+        const qCustomers = query(collection(db, 'customers'), orderBy('createdAt', 'desc'));
+        const unsubCustomers = onSnapshot(
+          qCustomers,
+          (snapshot) => {
+            const list: Customer[] = [];
+            snapshot.forEach((d) => list.push({ ...(d.data() as Customer), id: d.id }));
+            if (list.length > 0) {
+              setCustomers(list);
+              saveLocal('customers', list);
+            }
+          },
+          (err) => handleFirestoreError(err, OperationType.LIST, 'customers')
+        );
+        unsubs.push(unsubCustomers);
 
-      // Settings Company
-      const unsubCompany = onSnapshot(
-        doc(db, 'settings', 'company'),
-        (d) => {
-          if (d.exists()) {
-            const data = d.data() as CompanySettings;
-            setCompanySettings(data);
-            saveLocal('company_settings', data);
-          }
-        },
-        (err) => handleFirestoreError(err, OperationType.GET, 'settings/company')
-      );
-      unsubs.push(unsubCompany);
-    } catch (err) {
-      console.warn('Real-time listener setup exception:', err);
-    }
+        // Products
+        const qProducts = query(collection(db, 'products'), orderBy('createdAt', 'desc'));
+        const unsubProducts = onSnapshot(
+          qProducts,
+          (snapshot) => {
+            const list: Product[] = [];
+            snapshot.forEach((d) => list.push({ ...(d.data() as Product), id: d.id }));
+            if (list.length > 0) {
+              setProducts(list);
+              saveLocal('products', list);
+            }
+          },
+          (err) => handleFirestoreError(err, OperationType.LIST, 'products')
+        );
+        unsubs.push(unsubProducts);
+
+        // Payments
+        const qPayments = query(collection(db, 'payments'), orderBy('createdAt', 'desc'));
+        const unsubPayments = onSnapshot(
+          qPayments,
+          (snapshot) => {
+            const list: Payment[] = [];
+            snapshot.forEach((d) => list.push({ ...(d.data() as Payment), id: d.id }));
+            if (list.length > 0) {
+              setPayments(list);
+              saveLocal('payments', list);
+            }
+          },
+          (err) => handleFirestoreError(err, OperationType.LIST, 'payments')
+        );
+        unsubs.push(unsubPayments);
+
+        // Settings Company
+        const unsubCompany = onSnapshot(
+          doc(db, 'settings', 'company'),
+          (d) => {
+            if (d.exists()) {
+              const data = d.data() as CompanySettings;
+              setCompanySettings(data);
+              saveLocal('company_settings', data);
+            }
+          },
+          (err) => handleFirestoreError(err, OperationType.GET, 'settings/company')
+        );
+        unsubs.push(unsubCompany);
+      } catch (err) {
+        console.warn('Real-time listener setup exception:', err);
+      }
+    });
 
     return () => {
+      unsubscribeAuth();
       unsubs.forEach((u) => u());
     };
   }, []);
@@ -238,7 +253,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return updated;
     });
 
-    if (isConfigured && db) {
+    if (isConfigured && db && auth?.currentUser) {
       setDoc(doc(db, 'activityLogs', newLog.id), newLog).catch((err) =>
         handleFirestoreError(err, OperationType.CREATE, `activityLogs/${newLog.id}`)
       );
@@ -271,7 +286,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     saveLocal('company_settings', updated);
     logActivity('Company Settings Updated', 'Settings');
 
-    if (isConfigured && db) {
+    if (isConfigured && db && auth?.currentUser) {
       await setDoc(doc(db, 'settings', 'company'), updated);
     }
   };
@@ -282,7 +297,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     saveLocal('invoice_settings', updated);
     logActivity('Invoice Settings Updated', 'Settings');
 
-    if (isConfigured && db) {
+    if (isConfigured && db && auth?.currentUser) {
       await setDoc(doc(db, 'settings', 'invoice'), updated);
     }
   };
@@ -301,7 +316,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     });
     logActivity('Customer Created', 'Customers', newCust.customerId, { customerName: newCust.customerName });
 
-    if (isConfigured && db) {
+    if (isConfigured && db && auth?.currentUser) {
       await setDoc(doc(db, 'customers', newCust.id), newCust);
     }
     return newCust;
@@ -316,7 +331,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     });
     logActivity('Customer Updated', 'Customers', id);
 
-    if (isConfigured && db) {
+    if (isConfigured && db && auth?.currentUser) {
       await updateDoc(doc(db, 'customers', id), { ...data, updatedAt: now });
     }
   };
@@ -330,7 +345,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     });
     logActivity('Customer Deleted', 'Customers', id, { name: target?.customerName });
 
-    if (isConfigured && db) {
+    if (isConfigured && db && auth?.currentUser) {
       await deleteDoc(doc(db, 'customers', id));
     }
   };
@@ -349,7 +364,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     });
     logActivity('Product Created', 'Products', newProd.productId, { name: newProd.name });
 
-    if (isConfigured && db) {
+    if (isConfigured && db && auth?.currentUser) {
       await setDoc(doc(db, 'products', newProd.id), newProd);
     }
     return newProd;
@@ -364,7 +379,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     });
     logActivity('Product Updated', 'Products', id);
 
-    if (isConfigured && db) {
+    if (isConfigured && db && auth?.currentUser) {
       await updateDoc(doc(db, 'products', id), { ...data, updatedAt: now });
     }
   };
@@ -372,13 +387,13 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const deleteProduct = async (id: string) => {
     const target = products.find((p) => p.id === id);
     setProducts((prev) => {
-      const updated = prev.filter((p) => p.id !== id);
+      const updated = prev.filter((c) => c.id !== id);
       saveLocal('products', updated);
       return updated;
     });
     logActivity('Product Deleted', 'Products', id, { name: target?.name });
 
-    if (isConfigured && db) {
+    if (isConfigured && db && auth?.currentUser) {
       await deleteDoc(doc(db, 'products', id));
     }
   };
@@ -417,7 +432,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return updated;
     });
 
-    if (isConfigured && db) {
+    if (isConfigured && db && auth?.currentUser) {
       await setDoc(doc(db, 'invoices', newInv.id), newInv);
       await setDoc(doc(db, 'notifications', notif.id), notif);
     }
@@ -433,7 +448,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     });
     logActivity('Invoice Updated', 'Invoices', id);
 
-    if (isConfigured && db) {
+    if (isConfigured && db && auth?.currentUser) {
       await updateDoc(doc(db, 'invoices', id), { ...data, updatedAt: now });
     }
   };
@@ -457,8 +472,16 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     });
     logActivity('Invoice Cancelled', 'Invoices', inv?.invoiceNumber, { reason });
 
-    if (isConfigured && db) {
+    if (isConfigured && db && auth?.currentUser) {
       await updateDoc(doc(db, 'invoices', id), cancelData);
+    }
+  };
+
+  const updateInvoiceStatus = async (id: string, status: InvoiceStatus, reason?: string) => {
+    if (status === 'Cancelled') {
+      await cancelInvoice(id, reason);
+    } else {
+      await updateInvoice(id, { invoiceStatus: status });
     }
   };
 
@@ -498,7 +521,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return updated;
       });
 
-      if (isConfigured && db) {
+      if (isConfigured && db && auth?.currentUser) {
         await updateDoc(doc(db, 'invoices', targetInv.id), invoiceUpdate);
       }
     }
@@ -526,7 +549,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return updated;
     });
 
-    if (isConfigured && db) {
+    if (isConfigured && db && auth?.currentUser) {
       await setDoc(doc(db, 'payments', newPay.id), newPay);
       await setDoc(doc(db, 'notifications', notif.id), notif);
     }
@@ -552,7 +575,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     });
     logActivity('User Created', 'Users', newUser.email, { role: newUser.role });
 
-    if (isConfigured && db) {
+    if (isConfigured && db && auth?.currentUser) {
       await setDoc(doc(db, 'users', newUser.uid), newUser);
     }
     return newUser;
@@ -567,7 +590,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     });
     logActivity('User Updated', 'Users', uid);
 
-    if (isConfigured && db) {
+    if (isConfigured && db && auth?.currentUser) {
       await updateDoc(doc(db, 'users', uid), { ...data, updatedAt: now });
     }
   };
@@ -586,7 +609,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       saveLocal('notifications', updated);
       return updated;
     });
-    if (isConfigured && db) {
+    if (isConfigured && db && auth?.currentUser) {
       await updateDoc(doc(db, 'notifications', id), { isRead: true });
     }
   };
@@ -629,7 +652,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     logActivity('Admin Announcement Published', 'Announcements', newAnnounce.title);
 
-    if (isConfigured && db) {
+    if (isConfigured && db && auth?.currentUser) {
       await setDoc(doc(db, 'announcements', newAnnounce.id), newAnnounce);
       await setDoc(doc(db, 'notifications', notif.id), notif);
     }
@@ -691,6 +714,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         invoices,
         addInvoice,
         updateInvoice,
+        updateInvoiceStatus,
         cancelInvoice,
         payments,
         addPayment,

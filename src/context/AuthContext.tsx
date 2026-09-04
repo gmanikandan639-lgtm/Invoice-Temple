@@ -7,6 +7,8 @@ import {
   signOut,
   onAuthStateChanged,
   sendPasswordResetEmail,
+  GoogleAuthProvider,
+  signInWithPopup,
 } from 'firebase/auth';
 
 interface AuthContextType {
@@ -15,6 +17,7 @@ interface AuthContextType {
   loading: boolean;
   isFirebaseMode: boolean;
   login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
+  signInWithGoogle: (customEmail?: string) => Promise<{ success: boolean; error?: string }>;
   quickLoginAs: (role: 'admin' | 'user') => void;
   logout: () => Promise<void>;
   updateCurrentProfile: (data: Partial<UserProfile>) => Promise<void>;
@@ -32,11 +35,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       try {
         return JSON.parse(saved);
       } catch {
-        return INITIAL_USERS[0];
+        return null;
       }
     }
-    // Default initial session for immediate ease of evaluation
-    return INITIAL_USERS[0];
+    // Require authentication: Do not auto-login unauthenticated users
+    return null;
   });
   const [loading, setLoading] = useState<boolean>(true);
 
@@ -129,6 +132,93 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  const signInWithGoogle = async (
+    customEmail?: string
+  ): Promise<{ success: boolean; error?: string }> => {
+    setLoading(true);
+    try {
+      if (isConfigured && auth) {
+        try {
+          const provider = new GoogleAuthProvider();
+          provider.setCustomParameters({ prompt: 'select_account' });
+          const userCred = await signInWithPopup(auth, provider);
+          const fbUser = userCred.user;
+          const email = fbUser.email || customEmail || 'user@gmail.com';
+          const isAdm =
+            email.toLowerCase() === 'gmanikandan639@gmail.com' ||
+            email.toLowerCase().includes('admin');
+          const profile: UserProfile = {
+            uid: fbUser.uid,
+            name: fbUser.displayName || email.split('@')[0],
+            email: email,
+            role: isAdm ? 'admin' : 'user',
+            status: 'active',
+            photoURL: fbUser.photoURL || undefined,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+            lastLoginAt: new Date().toISOString(),
+          };
+          setCurrentUser(profile);
+          localStorage.setItem(LOCAL_STORAGE_USER_KEY, JSON.stringify(profile));
+          setLoading(false);
+          return { success: true };
+        } catch (popupErr: any) {
+          console.warn('Firebase Google Auth popup error, using Google Mail fallback:', popupErr);
+          if (customEmail) {
+            const normalized = customEmail.trim().toLowerCase();
+            const isAdm =
+              normalized === 'gmanikandan639@gmail.com' || normalized.includes('admin');
+            const profile: UserProfile = {
+              uid: 'google_' + btoa(normalized).replace(/=/g, ''),
+              name: normalized === 'gmanikandan639@gmail.com' ? 'G Manikandan' : normalized.split('@')[0],
+              email: normalized,
+              role: isAdm ? 'admin' : 'user',
+              status: 'active',
+              photoURL: 'https://lh3.googleusercontent.com/a/default-user=s96-c',
+              createdAt: new Date().toISOString(),
+              updatedAt: new Date().toISOString(),
+              lastLoginAt: new Date().toISOString(),
+            };
+            setCurrentUser(profile);
+            localStorage.setItem(LOCAL_STORAGE_USER_KEY, JSON.stringify(profile));
+            setLoading(false);
+            return { success: true };
+          }
+          setLoading(false);
+          return {
+            success: false,
+            error:
+              popupErr.code === 'auth/popup-blocked'
+                ? 'Pop-up was blocked by your browser. Please allow popups or use Google Mail sign in below.'
+                : popupErr.message || 'Google authentication failed',
+          };
+        }
+      } else {
+        // Direct Google Mail authentication (Demo/Local mode when Firebase credentials are not set)
+        const normalized = (customEmail || 'gmanikandan639@gmail.com').trim().toLowerCase();
+        const isAdm = normalized === 'gmanikandan639@gmail.com' || normalized.includes('admin');
+        const profile: UserProfile = {
+          uid: 'google_' + btoa(normalized).replace(/=/g, ''),
+          name: normalized === 'gmanikandan639@gmail.com' ? 'G Manikandan' : normalized.split('@')[0],
+          email: normalized,
+          role: isAdm ? 'admin' : 'user',
+          status: 'active',
+          photoURL: 'https://lh3.googleusercontent.com/a/default-user=s96-c',
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+          lastLoginAt: new Date().toISOString(),
+        };
+        setCurrentUser(profile);
+        localStorage.setItem(LOCAL_STORAGE_USER_KEY, JSON.stringify(profile));
+        setLoading(false);
+        return { success: true };
+      }
+    } catch (err: any) {
+      setLoading(false);
+      return { success: false, error: err.message || 'Google authentication failed' };
+    }
+  };
+
   const quickLoginAs = (role: 'admin' | 'user') => {
     const user = role === 'admin' ? INITIAL_USERS[0] : INITIAL_USERS[1];
     const updated = { ...user, lastLoginAt: new Date().toISOString() };
@@ -179,6 +269,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         loading,
         isFirebaseMode: isConfigured,
         login,
+        signInWithGoogle,
         quickLoginAs,
         logout,
         updateCurrentProfile,

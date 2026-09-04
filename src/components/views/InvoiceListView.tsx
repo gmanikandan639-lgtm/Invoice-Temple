@@ -9,6 +9,8 @@ import {
   FileText,
   Calendar,
   XCircle,
+  Edit2,
+  Bookmark,
 } from 'lucide-react';
 import { useData } from '../../context/DataContext';
 import { useAuth } from '../../context/AuthContext';
@@ -65,9 +67,14 @@ export const InvoiceListView: React.FC<InvoiceListViewProps> = ({ onNavigate }) 
 
       // Status filter
       if (statusFilter !== 'All') {
-        if (statusFilter === 'Cancelled' && inv.invoiceStatus !== 'Cancelled') return false;
-        if (statusFilter !== 'Cancelled' && (inv.invoiceStatus === 'Cancelled' || inv.paymentStatus !== statusFilter)) {
-          return false;
+        if (statusFilter === 'Draft') {
+          if (inv.invoiceStatus !== 'Draft') return false;
+        } else if (statusFilter === 'Cancelled') {
+          if (inv.invoiceStatus !== 'Cancelled') return false;
+        } else {
+          if (inv.invoiceStatus === 'Cancelled' || inv.invoiceStatus === 'Draft' || inv.paymentStatus !== statusFilter) {
+            return false;
+          }
         }
       }
 
@@ -210,6 +217,7 @@ export const InvoiceListView: React.FC<InvoiceListViewProps> = ({ onNavigate }) 
               className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-700 focus:outline-hidden focus:ring-2 focus:ring-amber-500 focus:bg-white cursor-pointer"
             >
               <option value="All">All Statuses</option>
+              <option value="Draft">Drafts Only</option>
               <option value="Paid">Paid</option>
               <option value="Partially Paid">Partially Paid</option>
               <option value="Unpaid">Unpaid</option>
@@ -360,6 +368,8 @@ export const InvoiceListView: React.FC<InvoiceListViewProps> = ({ onNavigate }) 
                         variant={
                           inv.invoiceStatus === 'Cancelled'
                             ? 'neutral'
+                            : inv.invoiceStatus === 'Draft'
+                            ? 'warning'
                             : inv.paymentStatus === 'Paid'
                             ? 'success'
                             : inv.paymentStatus === 'Partially Paid'
@@ -369,12 +379,26 @@ export const InvoiceListView: React.FC<InvoiceListViewProps> = ({ onNavigate }) 
                             : 'warning'
                         }
                       >
-                        {inv.invoiceStatus === 'Cancelled' ? 'Cancelled' : inv.paymentStatus}
+                        {inv.invoiceStatus === 'Cancelled'
+                          ? 'Cancelled'
+                          : inv.invoiceStatus === 'Draft'
+                          ? 'Draft'
+                          : inv.paymentStatus}
                       </Badge>
                     </td>
 
                     <td className="px-5 py-3.5 text-right">
                       <div className="flex items-center justify-end gap-1.5">
+                        {inv.invoiceStatus === 'Draft' && (
+                          <button
+                            onClick={() => onNavigate(`/invoices/edit/${inv.id}`)}
+                            title="Continue Editing Draft"
+                            className="p-1.5 bg-amber-50 hover:bg-amber-100 text-amber-700 rounded-lg transition-colors cursor-pointer"
+                          >
+                            <Edit2 className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+
                         <button
                           onClick={() => onNavigate(`/invoice/${inv.id}`)}
                           title="View Invoice"
@@ -383,7 +407,7 @@ export const InvoiceListView: React.FC<InvoiceListViewProps> = ({ onNavigate }) 
                           <Eye className="w-3.5 h-3.5" />
                         </button>
 
-                        {inv.invoiceStatus !== 'Cancelled' && inv.balanceAmount > 0 && (
+                        {inv.invoiceStatus !== 'Cancelled' && inv.invoiceStatus !== 'Draft' && inv.balanceAmount > 0 && (
                           <button
                             onClick={() => handleOpenPaymentModal(inv)}
                             title="Record Payment"

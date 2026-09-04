@@ -13,6 +13,8 @@ import {
   CheckCircle,
   AlertCircle,
   FileText,
+  Bookmark,
+  Sparkles,
 } from 'lucide-react';
 import { useData } from '../../context/DataContext';
 import { useAuth } from '../../context/AuthContext';
@@ -35,21 +37,37 @@ import { useToast } from '../common/Toast';
 
 interface InvoiceCreateViewProps {
   onNavigate: (path: string) => void;
+  editInvoiceId?: string;
 }
 
-export const InvoiceCreateView: React.FC<InvoiceCreateViewProps> = ({ onNavigate }) => {
+export const InvoiceCreateView: React.FC<InvoiceCreateViewProps> = ({
+  onNavigate,
+  editInvoiceId,
+}) => {
   const {
     companySettings,
     invoiceSettings,
     customers,
     addCustomer,
     products,
+    invoices,
     addInvoice,
+    updateInvoice,
     getNextInvoiceNumber,
     addPayment,
   } = useData();
   const { currentUser } = useAuth();
   const { showToast } = useToast();
+
+  // Check if editing existing invoice/draft
+  const existingInvoice = useMemo(() => {
+    if (!editInvoiceId) return null;
+    return invoices.find((inv) => inv.id === editInvoiceId) || null;
+  }, [editInvoiceId, invoices]);
+
+  const isEditingDraft = Boolean(
+    existingInvoice && (existingInvoice.invoiceStatus === 'Draft' || !existingInvoice.invoiceStatus)
+  );
 
   // Basic Details
   const [invoiceNumber, setInvoiceNumber] = useState('');
@@ -118,10 +136,39 @@ export const InvoiceCreateView: React.FC<InvoiceCreateViewProps> = ({ onNavigate
   // Loading state
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Initialize invoice number
+  // Load existing invoice if editing
   useEffect(() => {
-    setInvoiceNumber(getNextInvoiceNumber());
-  }, [invoiceSettings]);
+    if (existingInvoice) {
+      setInvoiceNumber(existingInvoice.invoiceNumber);
+      setInvoiceDate(existingInvoice.invoiceDate);
+      setDueDate(existingInvoice.dueDate);
+      setPaymentTerms(existingInvoice.paymentTerms || 'Net 30');
+      setPoNumber(existingInvoice.poNumber || '');
+      setReferenceNumber(existingInvoice.referenceNumber || '');
+      setPlaceOfSupply(existingInvoice.placeOfSupply || companySettings.state || 'Tamil Nadu');
+      setSalesperson(existingInvoice.salesperson || currentUser?.name || 'Admin');
+      setTemplate(existingInvoice.template || 'classic');
+      if (existingInvoice.customerId && existingInvoice.customerId !== 'draft_pending') {
+        setSelectedCustomerId(existingInvoice.customerId);
+      }
+      if (existingInvoice.items && existingInvoice.items.length > 0) {
+        setItems(existingInvoice.items);
+      }
+      setNotes(existingInvoice.notes || '');
+      setTerms(existingInvoice.terms || '');
+      if (existingInvoice.amountPaid && existingInvoice.amountPaid > 0) {
+        setRecordInitialPayment(true);
+        setInitialPaymentAmount(existingInvoice.amountPaid);
+      }
+    }
+  }, [existingInvoice]);
+
+  // Initialize invoice number for fresh creation
+  useEffect(() => {
+    if (!editInvoiceId) {
+      setInvoiceNumber(getNextInvoiceNumber());
+    }
+  }, [invoiceSettings, editInvoiceId]);
 
   // When customer changes, auto-set place of supply
   useEffect(() => {
@@ -298,18 +345,108 @@ export const InvoiceCreateView: React.FC<InvoiceCreateViewProps> = ({ onNavigate
     }
   };
 
-  // Form Submission
+  // Save as Draft (allows saving incomplete invoices without blocking validation)
+  const handleSaveDraft = async () => {
+    setIsSubmitting(true);
+    try {
+      // Allow saving even without customer selected yet
+      let customerToUse = selectedCustomer;
+      let custId = selectedCustomerId;
+
+      if (!customerToUse) {
+        custId = 'draft_pending';
+        customerToUse = {
+          id: 'draft_pending',
+          customerId: 'DRAFT-PENDING',
+          customerName: 'Draft Client (Pending Details)',
+          billingAddress: 'Address Pending',
+          city: companySettings.city || 'City',
+          state: placeOfSupply || companySettings.state || 'Tamil Nadu',
+          pincode: companySettings.pincode || '000000',
+          createdBy: currentUser?.uid || 'user',
+          createdAt: new Date().toISOString(),
+        };
+      }
+
+      // Sanitize items so incomplete items don't break calculations
+      const draftItems: InvoiceItem[] = items.map((it, idx) => ({
+        ...it,
+        id: it.id || `item_draft_${idx + 1}`,
+        name: it.name.trim() || `Draft Item ${idx + 1}`,
+        quantity: Math.max(1, Number(it.quantity) || 1),
+        rate: Math.max(0, Number(it.rate) || 0),
+        discount: Number(it.discount) || 0,
+        discountType: it.discountType || 'fixed',
+        taxableAmount: it.taxableAmount || 0,
+        gstRate: it.gstRate || 0,
+        cgst: it.cgst || 0,
+        sgst: it.sgst || 0,
+        igst: it.igst || 0,
+        total: it.total || 0,
+      }));
+
+      const paidAmt = recordInitialPayment ? Number(initialPaymentAmount) || 0 : 0;
+      const balanceAmt = Math.max(0, Math.round((totals.grandTotal - paidAmt) * 100) / 100);
+
+      const draftPayload = {
+        invoiceNumber: invoiceNumber.trim() || `DFT-${Date.now().toString().slice(-6)}`,
+        invoiceDate,
+        dueDate,
+        paymentTerms,
+        poNumber,
+        referenceNumber,
+        placeOfSupply: placeOfSupply || companySettings.state || 'Tamil Nadu',
+        salesperson,
+        customerId: custId,
+        customerSnapshot: customerToUse,
+        items: draftItems,
+        subtotal: totals.subtotal,
+        discount: totals.discount,
+        taxableAmount: totals.taxableAmount,
+        cgst: totals.cgst,
+        sgst: totals.sgst,
+        igst: totals.igst,
+        roundOff: totals.roundOff,
+        grandTotal: totals.grandTotal,
+        amountPaid: paidAmt,
+        balanceAmount: balanceAmt,
+        paymentStatus: 'Unpaid' as const,
+        invoiceStatus: 'Draft' as const,
+        template,
+        notes,
+        terms,
+        createdBy: currentUser?.uid || 'user',
+        createdByName: currentUser?.name || 'Staff',
+      };
+
+      if (editInvoiceId) {
+        await updateInvoice(editInvoiceId, draftPayload);
+        showToast('Draft invoice saved successfully!');
+        onNavigate(`/invoice/${editInvoiceId}`);
+      } else {
+        const newInv = await addInvoice(draftPayload);
+        showToast(`Draft ${newInv.invoiceNumber} saved! You can resume editing anytime.`);
+        onNavigate(`/invoice/${newInv.id}`);
+      }
+    } catch (err: any) {
+      showToast('Error saving draft: ' + err.message, 'error');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  // Form Submission for Finalized / Issued Invoice
   const handleSubmitInvoice = async (e: React.FormEvent) => {
     e.preventDefault();
 
     if (!selectedCustomer) {
-      showToast('Please select or create a customer', 'error');
+      showToast('Please select or create a customer to finalize the invoice', 'error');
       return;
     }
 
     const invalidItem = items.find((it) => !it.name.trim() || it.rate <= 0);
     if (invalidItem) {
-      showToast('All items must have a valid name and positive unit rate', 'error');
+      showToast('All items must have a valid name and positive unit rate to finalize', 'error');
       return;
     }
 
@@ -321,57 +458,109 @@ export const InvoiceCreateView: React.FC<InvoiceCreateViewProps> = ({ onNavigate
       const paymentStatus = balanceAmt === 0 ? 'Paid' : paidAmt > 0 ? 'Partially Paid' : 'Unpaid';
       const invoiceStatus = balanceAmt === 0 ? 'Paid' : 'Sent';
 
-      const newInv = await addInvoice({
-        invoiceNumber,
-        invoiceDate,
-        dueDate,
-        paymentTerms,
-        poNumber,
-        referenceNumber,
-        placeOfSupply,
-        salesperson,
-        customerId: selectedCustomer.id,
-        customerSnapshot: selectedCustomer, // Immutable snapshot!
-        items,
-        subtotal: totals.subtotal,
-        discount: totals.discount,
-        taxableAmount: totals.taxableAmount,
-        cgst: totals.cgst,
-        sgst: totals.sgst,
-        igst: totals.igst,
-        roundOff: totals.roundOff,
-        grandTotal: totals.grandTotal,
-        amountPaid: paidAmt,
-        balanceAmount: balanceAmt,
-        paymentStatus,
-        invoiceStatus,
-        template,
-        notes,
-        terms,
-        createdBy: currentUser?.uid || 'user',
-        createdByName: currentUser?.name || 'Staff',
-      });
-
-      // If initial payment was recorded
-      if (recordInitialPayment && paidAmt > 0) {
-        await addPayment({
-          paymentId: `PAY-${Date.now().toString().slice(-6)}`,
-          invoiceId: newInv.id,
-          invoiceNumber: newInv.invoiceNumber,
+      if (editInvoiceId) {
+        // Finalize / update existing invoice or draft
+        await updateInvoice(editInvoiceId, {
+          invoiceNumber,
+          invoiceDate,
+          dueDate,
+          paymentTerms,
+          poNumber,
+          referenceNumber,
+          placeOfSupply,
+          salesperson,
           customerId: selectedCustomer.id,
-          customerName: selectedCustomer.customerName,
-          paymentDate: invoiceDate,
-          amount: paidAmt,
-          paymentMode: initialPaymentMode,
-          referenceNumber: initialPaymentRef,
-          notes: 'Initial settlement on invoice creation',
+          customerSnapshot: selectedCustomer,
+          items,
+          subtotal: totals.subtotal,
+          discount: totals.discount,
+          taxableAmount: totals.taxableAmount,
+          cgst: totals.cgst,
+          sgst: totals.sgst,
+          igst: totals.igst,
+          roundOff: totals.roundOff,
+          grandTotal: totals.grandTotal,
+          amountPaid: paidAmt,
+          balanceAmount: balanceAmt,
+          paymentStatus,
+          invoiceStatus,
+          template,
+          notes,
+          terms,
+        });
+
+        if (recordInitialPayment && paidAmt > 0) {
+          await addPayment({
+            paymentId: `PAY-${Date.now().toString().slice(-6)}`,
+            invoiceId: editInvoiceId,
+            invoiceNumber,
+            customerId: selectedCustomer.id,
+            customerName: selectedCustomer.customerName,
+            paymentDate: invoiceDate,
+            amount: paidAmt,
+            paymentMode: initialPaymentMode,
+            referenceNumber: initialPaymentRef,
+            notes: 'Initial settlement on invoice finalization',
+            createdBy: currentUser?.uid || 'user',
+            createdByName: currentUser?.name || 'Staff',
+          });
+        }
+
+        showToast(`Invoice ${invoiceNumber} finalized and saved successfully!`);
+        onNavigate(`/invoice/${editInvoiceId}`);
+      } else {
+        const newInv = await addInvoice({
+          invoiceNumber,
+          invoiceDate,
+          dueDate,
+          paymentTerms,
+          poNumber,
+          referenceNumber,
+          placeOfSupply,
+          salesperson,
+          customerId: selectedCustomer.id,
+          customerSnapshot: selectedCustomer, // Immutable snapshot!
+          items,
+          subtotal: totals.subtotal,
+          discount: totals.discount,
+          taxableAmount: totals.taxableAmount,
+          cgst: totals.cgst,
+          sgst: totals.sgst,
+          igst: totals.igst,
+          roundOff: totals.roundOff,
+          grandTotal: totals.grandTotal,
+          amountPaid: paidAmt,
+          balanceAmount: balanceAmt,
+          paymentStatus,
+          invoiceStatus,
+          template,
+          notes,
+          terms,
           createdBy: currentUser?.uid || 'user',
           createdByName: currentUser?.name || 'Staff',
         });
-      }
 
-      showToast(`Invoice ${newInv.invoiceNumber} created successfully!`);
-      onNavigate(`/invoice/${newInv.id}`);
+        // If initial payment was recorded
+        if (recordInitialPayment && paidAmt > 0) {
+          await addPayment({
+            paymentId: `PAY-${Date.now().toString().slice(-6)}`,
+            invoiceId: newInv.id,
+            invoiceNumber: newInv.invoiceNumber,
+            customerId: selectedCustomer.id,
+            customerName: selectedCustomer.customerName,
+            paymentDate: invoiceDate,
+            amount: paidAmt,
+            paymentMode: initialPaymentMode,
+            referenceNumber: initialPaymentRef,
+            notes: 'Initial settlement on invoice creation',
+            createdBy: currentUser?.uid || 'user',
+            createdByName: currentUser?.name || 'Staff',
+          });
+        }
+
+        showToast(`Invoice ${newInv.invoiceNumber} created successfully!`);
+        onNavigate(`/invoice/${newInv.id}`);
+      }
     } catch (err: any) {
       showToast('Error generating invoice: ' + err.message, 'error');
       setIsSubmitting(false);
@@ -381,7 +570,7 @@ export const InvoiceCreateView: React.FC<InvoiceCreateViewProps> = ({ onNavigate
   return (
     <div className="space-y-6 max-w-6xl mx-auto pb-12">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="flex items-center gap-3">
           <button
             type="button"
@@ -391,26 +580,63 @@ export const InvoiceCreateView: React.FC<InvoiceCreateViewProps> = ({ onNavigate
             <ArrowLeft className="w-5 h-5" />
           </button>
           <div>
-            <h1 className="text-xl font-extrabold text-slate-900 tracking-tight">Create New Invoice</h1>
+            <div className="flex items-center gap-2">
+              <h1 className="text-xl font-extrabold text-slate-900 tracking-tight">
+                {isEditingDraft ? 'Edit Draft Invoice' : 'Create New Invoice'}
+              </h1>
+              {isEditingDraft && (
+                <span className="px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-800 text-[11px] font-bold border border-amber-200">
+                  DRAFT
+                </span>
+              )}
+            </div>
             <p className="text-xs text-slate-500 mt-0.5">
-              GST compliant billing with automatic tax split and snapshot immutability
+              {isEditingDraft
+                ? 'Update incomplete draft details or finalize to issue as a tax invoice'
+                : 'GST compliant billing with automatic tax split and snapshot immutability'}
             </p>
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
-          <span className="text-xs font-semibold text-slate-500 hidden sm:inline-block">Template:</span>
-          <select
-            value={template}
-            onChange={(e) => setTemplate(e.target.value as InvoiceTemplate)}
-            className="px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:ring-2 focus:ring-amber-500 cursor-pointer"
+        <div className="flex items-center gap-2.5">
+          <button
+            type="button"
+            onClick={handleSaveDraft}
+            disabled={isSubmitting}
+            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 text-xs font-bold transition-all shadow-xs active:scale-98 disabled:opacity-50 cursor-pointer"
+            title="Save incomplete invoice without finalizing"
           >
-            <option value="classic">Classic Professional</option>
-            <option value="modern">Modern Business</option>
-            <option value="gst">Compact GST</option>
-          </select>
+            <Bookmark className="w-3.5 h-3.5 text-amber-500" />
+            <span>{isEditingDraft ? 'Update Draft' : 'Save as Draft'}</span>
+          </button>
+
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-semibold text-slate-500 hidden sm:inline-block">Template:</span>
+            <select
+              value={template}
+              onChange={(e) => setTemplate(e.target.value as InvoiceTemplate)}
+              className="px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:ring-2 focus:ring-amber-500 cursor-pointer"
+            >
+              <option value="classic">Classic Professional</option>
+              <option value="modern">Modern Business</option>
+              <option value="gst">Compact GST</option>
+            </select>
+          </div>
         </div>
       </div>
+
+      {isEditingDraft && (
+        <div className="bg-amber-50 border border-amber-200 rounded-2xl p-3.5 px-4 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2.5">
+            <div className="p-1.5 rounded-lg bg-amber-100 text-amber-700">
+              <Bookmark className="w-4 h-4" />
+            </div>
+            <p className="text-xs text-amber-900 font-medium">
+              You are editing draft <strong>{invoiceNumber}</strong>. You can save changes as a draft or click Finalize to issue this invoice.
+            </p>
+          </div>
+        </div>
+      )}
 
       <form onSubmit={handleSubmitInvoice} className="space-y-6">
         {/* Section 1: Company & Invoice Header Grid */}
@@ -953,15 +1179,33 @@ export const InvoiceCreateView: React.FC<InvoiceCreateViewProps> = ({ onNavigate
                 )}
               </div>
 
-              <div className="pt-4 border-t border-slate-800">
+              <div className="pt-4 border-t border-slate-800 space-y-2.5">
                 <button
                   type="submit"
                   disabled={isSubmitting}
                   className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-sm transition-all shadow-lg shadow-amber-500/20 active:scale-98 disabled:opacity-50 cursor-pointer"
                 >
                   <Save className="w-4 h-4" />
-                  {isSubmitting ? 'Finalizing Invoice...' : 'Generate & Save Invoice'}
+                  {isSubmitting
+                    ? 'Finalizing Invoice...'
+                    : isEditingDraft
+                    ? 'Finalize & Issue Invoice'
+                    : 'Generate & Save Invoice'}
                 </button>
+
+                <button
+                  type="button"
+                  onClick={handleSaveDraft}
+                  disabled={isSubmitting}
+                  className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl border border-slate-700 hover:border-slate-600 bg-slate-800/80 hover:bg-slate-800 text-slate-200 hover:text-white font-bold text-xs transition-all active:scale-98 disabled:opacity-50 cursor-pointer"
+                >
+                  <Bookmark className="w-3.5 h-3.5 text-amber-400" />
+                  {isEditingDraft ? 'Update Draft Changes' : 'Save as Draft (Incomplete)'}
+                </button>
+
+                <p className="text-[11px] text-slate-400 text-center leading-relaxed">
+                  Drafts can be incomplete and saved for later editing without finalizing tax sequence numbers.
+                </p>
               </div>
             </div>
           </div>

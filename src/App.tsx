@@ -71,6 +71,16 @@ const RouterContent: React.FC = () => {
     );
   }
 
+  // Handle Dynamic Route: Edit Invoice / Draft (/invoices/edit/:id)
+  if (currentPath.startsWith('/invoices/edit/')) {
+    const editId = currentPath.replace('/invoices/edit/', '');
+    return (
+      <AppLayout currentPath="/invoices" onNavigate={navigate}>
+        <InvoiceCreateView onNavigate={navigate} editInvoiceId={editId} />
+      </AppLayout>
+    );
+  }
+
   // View Resolver based on Route
   const renderView = () => {
     switch (currentPath) {

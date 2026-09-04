@@ -11,6 +11,8 @@ import {
   QrCode,
   FileCheck,
   AlertTriangle,
+  Edit2,
+  Bookmark,
 } from 'lucide-react';
 import { useData } from '../../context/DataContext';
 import { useAuth } from '../../context/AuthContext';
@@ -156,6 +158,8 @@ export const InvoiceDetailView: React.FC<InvoiceDetailViewProps> = ({
                 variant={
                   invoice.invoiceStatus === 'Cancelled'
                     ? 'neutral'
+                    : invoice.invoiceStatus === 'Draft'
+                    ? 'warning'
                     : invoice.paymentStatus === 'Paid'
                     ? 'success'
                     : invoice.paymentStatus === 'Partially Paid'
@@ -163,7 +167,11 @@ export const InvoiceDetailView: React.FC<InvoiceDetailViewProps> = ({
                     : 'warning'
                 }
               >
-                {invoice.invoiceStatus === 'Cancelled' ? 'Cancelled' : invoice.paymentStatus}
+                {invoice.invoiceStatus === 'Cancelled'
+                  ? 'Cancelled'
+                  : invoice.invoiceStatus === 'Draft'
+                  ? 'Draft'
+                  : invoice.paymentStatus}
               </Badge>
             </div>
             <p className="text-xs text-slate-400 mt-0.5">
@@ -174,6 +182,17 @@ export const InvoiceDetailView: React.FC<InvoiceDetailViewProps> = ({
 
         {/* Action Buttons */}
         <div className="flex flex-wrap items-center gap-2">
+          {/* Edit Draft Button */}
+          {invoice.invoiceStatus === 'Draft' && (
+            <button
+              onClick={() => onNavigate(`/invoices/edit/${invoice.id}`)}
+              className="flex items-center gap-1.5 px-3 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-bold rounded-xl shadow-xs transition-colors cursor-pointer"
+            >
+              <Edit2 className="w-3.5 h-3.5" />
+              Continue Editing
+            </button>
+          )}
+
           {/* Template Selector */}
           <div className="flex items-center bg-slate-100 p-1 rounded-xl border border-slate-200 text-xs font-semibold">
             <button
@@ -246,6 +265,30 @@ export const InvoiceDetailView: React.FC<InvoiceDetailViewProps> = ({
           )}
         </div>
       </div>
+
+      {/* Draft Status Banner */}
+      {invoice.invoiceStatus === 'Draft' && (
+        <div className="print:hidden bg-amber-50 border border-amber-200 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 rounded-xl bg-amber-100 text-amber-800">
+              <Bookmark className="w-5 h-5" />
+            </div>
+            <div>
+              <p className="text-sm font-bold text-amber-950">This invoice is saved as an incomplete Draft</p>
+              <p className="text-xs text-amber-800">
+                It has not been issued to the client yet. You can resume editing and finalize it to assign official tax invoice records.
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={() => onNavigate(`/invoices/edit/${invoice.id}`)}
+            className="inline-flex items-center gap-1.5 px-4 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-black rounded-xl shadow-xs transition-colors shrink-0 cursor-pointer"
+          >
+            <Edit2 className="w-4 h-4" />
+            Edit &amp; Finalize Draft
+          </button>
+        </div>
+      )}
 
       {/* =========================================================================
           INVOICE PRINTABLE DOCUMENT (A4 Optimized)

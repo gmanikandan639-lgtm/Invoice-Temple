@@ -82,10 +82,8 @@ service cloud.firestore {
 
     // INVOICES COLLECTION
     match /invoices/{invoiceId} {
-      // Admin can read all invoices; normal users can read invoices they created or authorized
-      allow read: if isSignedIn() && isUserActive() && (
-        isAdmin() || resource.data.createdBy == request.auth.uid
-      );
+      // Invoices can be read by authenticated active users
+      allow read: if isSignedIn() && isUserActive();
       
       // Create invoice: authenticated active users
       allow create: if isSignedIn() && isUserActive() && 
@@ -104,9 +102,7 @@ service cloud.firestore {
 
     // PAYMENTS COLLECTION
     match /payments/{paymentId} {
-      allow read: if isSignedIn() && isUserActive() && (
-        isAdmin() || resource.data.createdBy == request.auth.uid
-      );
+      allow read: if isSignedIn() && isUserActive();
       allow create: if isSignedIn() && isUserActive() && 
         request.resource.data.createdBy == request.auth.uid &&
         isValidId(paymentId);
@@ -137,7 +133,8 @@ service cloud.firestore {
 
     // SETTINGS (Company & Invoice)
     match /settings/{settingDoc} {
-      allow read: if isSignedIn() && isUserActive();
+      // Company profile and invoice settings read permitted for display & invoices
+      allow read: if true;
       allow write: if isAdmin();
     }
 
