@@ -1,0 +1,6 @@
+{
+  "name": "Invoice Temple",
+  "description": "Smart Billing & Invoice Management System with multi-role access, real-time Firestore sync, Indian GST calculations, customizable invoice templates, and comprehensive reporting.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

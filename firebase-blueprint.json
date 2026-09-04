@@ -1,0 +1,275 @@
+{
+  "entities": {
+    "user": {
+      "title": "User",
+      "description": "User profile with role-based permissions and account status",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "maxLength": 128 },
+        "name": { "type": "string", "maxLength": 100 },
+        "email": { "type": "string", "format": "email", "maxLength": 120 },
+        "phone": { "type": "string", "maxLength": 20 },
+        "role": { "type": "string", "enum": ["admin", "user"] },
+        "status": { "type": "string", "enum": ["active", "disabled"] },
+        "photoURL": { "type": "string", "maxLength": 500 },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" },
+        "lastLoginAt": { "type": "string" }
+      },
+      "required": ["uid", "name", "email", "role", "status"]
+    },
+    "customer": {
+      "title": "Customer",
+      "description": "Customer client record for billing and shipping",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "customerId": { "type": "string", "maxLength": 30 },
+        "customerName": { "type": "string", "maxLength": 100 },
+        "companyName": { "type": "string", "maxLength": 120 },
+        "mobileNumber": { "type": "string", "maxLength": 20 },
+        "email": { "type": "string", "format": "email", "maxLength": 120 },
+        "gstin": { "type": "string", "maxLength": 20 },
+        "pan": { "type": "string", "maxLength": 15 },
+        "billingAddress": { "type": "string", "maxLength": 300 },
+        "shippingAddress": { "type": "string", "maxLength": 300 },
+        "city": { "type": "string", "maxLength": 60 },
+        "state": { "type": "string", "maxLength": 60 },
+        "pincode": { "type": "string", "maxLength": 10 },
+        "stateCode": { "type": "string", "maxLength": 5 },
+        "notes": { "type": "string", "maxLength": 500 },
+        "createdBy": { "type": "string", "maxLength": 128 },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["customerId", "customerName", "billingAddress", "state"]
+    },
+    "product": {
+      "title": "Product",
+      "description": "Product or service item for billing",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "productId": { "type": "string", "maxLength": 30 },
+        "name": { "type": "string", "maxLength": 120 },
+        "description": { "type": "string", "maxLength": 400 },
+        "hsnSacCode": { "type": "string", "maxLength": 15 },
+        "unit": { "type": "string", "maxLength": 20 },
+        "price": { "type": "number" },
+        "gstRate": { "type": "number" },
+        "cgstRate": { "type": "number" },
+        "sgstRate": { "type": "number" },
+        "igstRate": { "type": "number" },
+        "status": { "type": "string", "enum": ["active", "inactive"] },
+        "createdBy": { "type": "string", "maxLength": 128 },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["productId", "name", "price", "status"]
+    },
+    "invoice": {
+      "title": "Invoice",
+      "description": "Billing invoice with snapshot data, GST calculations, items, and status",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "invoiceNumber": { "type": "string", "maxLength": 50 },
+        "invoiceDate": { "type": "string" },
+        "dueDate": { "type": "string" },
+        "paymentTerms": { "type": "string", "maxLength": 50 },
+        "poNumber": { "type": "string", "maxLength": 50 },
+        "referenceNumber": { "type": "string", "maxLength": 50 },
+        "placeOfSupply": { "type": "string", "maxLength": 60 },
+        "salesperson": { "type": "string", "maxLength": 100 },
+        "customerId": { "type": "string", "maxLength": 128 },
+        "customerSnapshot": { "type": "object" },
+        "items": { "type": "array" },
+        "subtotal": { "type": "number" },
+        "discount": { "type": "number" },
+        "taxableAmount": { "type": "number" },
+        "cgst": { "type": "number" },
+        "sgst": { "type": "number" },
+        "igst": { "type": "number" },
+        "roundOff": { "type": "number" },
+        "grandTotal": { "type": "number" },
+        "amountPaid": { "type": "number" },
+        "balanceAmount": { "type": "number" },
+        "paymentStatus": { "type": "string", "enum": ["Unpaid", "Partially Paid", "Paid", "Overdue"] },
+        "invoiceStatus": { "type": "string", "enum": ["Draft", "Sent", "Partially Paid", "Paid", "Overdue", "Cancelled"] },
+        "notes": { "type": "string", "maxLength": 1000 },
+        "terms": { "type": "string", "maxLength": 1000 },
+        "createdBy": { "type": "string", "maxLength": 128 },
+        "createdByName": { "type": "string", "maxLength": 100 },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" },
+        "cancelledAt": { "type": "string" },
+        "cancelledBy": { "type": "string" }
+      },
+      "required": ["invoiceNumber", "invoiceDate", "customerId", "grandTotal", "paymentStatus", "invoiceStatus"]
+    },
+    "payment": {
+      "title": "Payment",
+      "description": "Payment transaction record linked to invoice",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "paymentId": { "type": "string", "maxLength": 50 },
+        "invoiceId": { "type": "string", "maxLength": 128 },
+        "invoiceNumber": { "type": "string", "maxLength": 50 },
+        "customerId": { "type": "string", "maxLength": 128 },
+        "customerName": { "type": "string", "maxLength": 100 },
+        "paymentDate": { "type": "string" },
+        "amount": { "type": "number" },
+        "paymentMode": { "type": "string", "enum": ["Cash", "UPI", "Bank Transfer", "Card", "Cheque", "Other"] },
+        "referenceNumber": { "type": "string", "maxLength": 80 },
+        "notes": { "type": "string", "maxLength": 300 },
+        "createdBy": { "type": "string", "maxLength": 128 },
+        "createdByName": { "type": "string", "maxLength": 100 },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["paymentId", "invoiceId", "amount", "paymentMode", "paymentDate"]
+    },
+    "notification": {
+      "title": "Notification",
+      "description": "User in-app notifications",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "recipientUserId": { "type": "string", "maxLength": 128 },
+        "title": { "type": "string", "maxLength": 120 },
+        "message": { "type": "string", "maxLength": 300 },
+        "type": { "type": "string", "enum": ["invoice_created", "invoice_updated", "payment_received", "invoice_paid", "invoice_overdue", "user_disabled", "announcement"] },
+        "relatedInvoiceId": { "type": "string", "maxLength": 128 },
+        "isRead": { "type": "boolean" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["recipientUserId", "title", "message", "type", "isRead"]
+    },
+    "announcement": {
+      "title": "Announcement",
+      "description": "Global admin announcements to all active users",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "title": { "type": "string", "maxLength": 120 },
+        "message": { "type": "string", "maxLength": 600 },
+        "createdBy": { "type": "string", "maxLength": 128 },
+        "createdByName": { "type": "string", "maxLength": 100 },
+        "priority": { "type": "string", "enum": ["normal", "important", "urgent"] },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["title", "message", "createdBy"]
+    },
+    "activityLog": {
+      "title": "ActivityLog",
+      "description": "Audit trail of user and admin actions",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "userId": { "type": "string", "maxLength": 128 },
+        "userName": { "type": "string", "maxLength": 100 },
+        "action": { "type": "string", "maxLength": 80 },
+        "module": { "type": "string", "maxLength": 50 },
+        "recordId": { "type": "string", "maxLength": 128 },
+        "timestamp": { "type": "string" },
+        "metadata": { "type": "object" }
+      },
+      "required": ["userId", "action", "module"]
+    },
+    "companySettings": {
+      "title": "CompanySettings",
+      "description": "Company profile, branding, tax, and bank details",
+      "type": "object",
+      "properties": {
+        "companyName": { "type": "string", "maxLength": 120 },
+        "logoUrl": { "type": "string", "maxLength": 500 },
+        "address": { "type": "string", "maxLength": 300 },
+        "city": { "type": "string", "maxLength": 60 },
+        "state": { "type": "string", "maxLength": 60 },
+        "pincode": { "type": "string", "maxLength": 10 },
+        "phone": { "type": "string", "maxLength": 25 },
+        "email": { "type": "string", "format": "email", "maxLength": 100 },
+        "website": { "type": "string", "maxLength": 100 },
+        "gstin": { "type": "string", "maxLength": 20 },
+        "pan": { "type": "string", "maxLength": 15 },
+        "bankName": { "type": "string", "maxLength": 80 },
+        "accountNumber": { "type": "string", "maxLength": 40 },
+        "ifsc": { "type": "string", "maxLength": 20 },
+        "branch": { "type": "string", "maxLength": 60 },
+        "upiId": { "type": "string", "maxLength": 60 },
+        "authorizedPerson": { "type": "string", "maxLength": 100 },
+        "signatureUrl": { "type": "string", "maxLength": 500 },
+        "termsAndConditions": { "type": "string", "maxLength": 1500 },
+        "invoiceFooter": { "type": "string", "maxLength": 300 },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["companyName", "address", "state", "gstin"]
+    },
+    "invoiceSettings": {
+      "title": "InvoiceSettings",
+      "description": "Invoice numbering sequence, default template, and defaults",
+      "type": "object",
+      "properties": {
+        "invoicePrefix": { "type": "string", "maxLength": 20 },
+        "financialYear": { "type": "string", "maxLength": 15 },
+        "startingNumber": { "type": "number" },
+        "numberFormat": { "type": "string", "maxLength": 40 },
+        "defaultTemplate": { "type": "string", "enum": ["classic", "modern", "gst"] },
+        "defaultTaxType": { "type": "string", "enum": ["GST", "None"] },
+        "currency": { "type": "string", "maxLength": 10 },
+        "decimalPlaces": { "type": "number" },
+        "defaultPaymentTerms": { "type": "string", "maxLength": 50 },
+        "defaultNotes": { "type": "string", "maxLength": 500 },
+        "defaultTermsAndConditions": { "type": "string", "maxLength": 1500 },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["invoicePrefix", "financialYear", "startingNumber"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/user" },
+      "description": "User profiles with roles and account active/disabled states"
+    },
+    "/customers/{customerId}": {
+      "schema": { "$ref": "#/entities/customer" },
+      "description": "Customer address, GST, and contact profiles"
+    },
+    "/products/{productId}": {
+      "schema": { "$ref": "#/entities/product" },
+      "description": "Inventory catalog of goods and services with GST rates"
+    },
+    "/invoices/{invoiceId}": {
+      "schema": { "$ref": "#/entities/invoice" },
+      "description": "Primary invoice records with line items, tax calculations and audit snapshots"
+    },
+    "/payments/{paymentId}": {
+      "schema": { "$ref": "#/entities/payment" },
+      "description": "Payment ledger records linked to invoices"
+    },
+    "/notifications/{notificationId}": {
+      "schema": { "$ref": "#/entities/notification" },
+      "description": "User notifications with read state"
+    },
+    "/announcements/{announcementId}": {
+      "schema": { "$ref": "#/entities/announcement" },
+      "description": "Company-wide broadcast announcements from admins"
+    },
+    "/activityLogs/{logId}": {
+      "schema": { "$ref": "#/entities/activityLog" },
+      "description": "Audit trail log records for system events"
+    },
+    "/settings/company": {
+      "schema": { "$ref": "#/entities/companySettings" },
+      "description": "Company profile, logo, tax numbers, and bank details"
+    },
+    "/settings/invoice": {
+      "schema": { "$ref": "#/entities/invoiceSettings" },
+      "description": "Invoice sequence configuration, format, and default template"
+    },
+    "/counters/{counterId}": {
+      "schema": "object",
+      "description": "Atomic sequence counters for collision-proof invoice numbers"
+    }
+  }
+}

@@ -1,0 +1,150 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Default deny all
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Helper functions
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() > 0 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function getUserData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && (
+        // Admin document check or role check from user profile
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid)) ||
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin') ||
+        request.auth.token.email == 'gmanikandan639@gmail.com'
+      );
+    }
+
+    function isUserActive() {
+      return isSignedIn() && (
+        !exists(/databases/$(database)/documents/users/$(request.auth.uid)) ||
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.status != 'disabled'
+      );
+    }
+
+    // USERS COLLECTION
+    match /users/{userId} {
+      // User can read their own profile, admin can read any user
+      allow read: if isSignedIn() && (request.auth.uid == userId || isAdmin());
+      
+      // Initial self-registration or profile update
+      allow create: if isSignedIn() && request.auth.uid == userId && 
+        (!('role' in request.resource.data) || request.resource.data.role == 'user' || isAdmin());
+      
+      // Update: user can update own non-role fields if active; admin can update any field
+      allow update: if isSignedIn() && isUserActive() && (
+        isAdmin() || 
+        (request.auth.uid == userId && 
+         !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'status']))
+      );
+      
+      // Delete: admin only
+      allow delete: if isAdmin();
+    }
+
+    // CUSTOMERS COLLECTION
+    match /customers/{customerId} {
+      allow read: if isSignedIn() && isUserActive();
+      allow create: if isSignedIn() && isUserActive() && isValidId(customerId);
+      allow update: if isSignedIn() && isUserActive() && (
+        isAdmin() || resource.data.createdBy == request.auth.uid
+      );
+      allow delete: if isSignedIn() && isUserActive() && (
+        isAdmin() || resource.data.createdBy == request.auth.uid
+      );
+    }
+
+    // PRODUCTS / SERVICES COLLECTION
+    match /products/{productId} {
+      allow read: if isSignedIn() && isUserActive();
+      allow create: if isSignedIn() && isUserActive() && isValidId(productId);
+      allow update: if isSignedIn() && isUserActive() && (
+        isAdmin() || resource.data.createdBy == request.auth.uid
+      );
+      allow delete: if isAdmin();
+    }
+
+    // INVOICES COLLECTION
+    match /invoices/{invoiceId} {
+      // Admin can read all invoices; normal users can read invoices they created or authorized
+      allow read: if isSignedIn() && isUserActive() && (
+        isAdmin() || resource.data.createdBy == request.auth.uid
+      );
+      
+      // Create invoice: authenticated active users
+      allow create: if isSignedIn() && isUserActive() && 
+        request.resource.data.createdBy == request.auth.uid &&
+        isValidId(invoiceId);
+        
+      // Update invoice: admin or creator (if not cancelled, or admin override)
+      allow update: if isSignedIn() && isUserActive() && (
+        isAdmin() || 
+        (resource.data.createdBy == request.auth.uid && resource.data.invoiceStatus != 'Cancelled')
+      );
+      
+      // Invoices should not be hard-deleted; cancel status is preferred
+      allow delete: if isAdmin();
+    }
+
+    // PAYMENTS COLLECTION
+    match /payments/{paymentId} {
+      allow read: if isSignedIn() && isUserActive() && (
+        isAdmin() || resource.data.createdBy == request.auth.uid
+      );
+      allow create: if isSignedIn() && isUserActive() && 
+        request.resource.data.createdBy == request.auth.uid &&
+        isValidId(paymentId);
+      allow update, delete: if isAdmin();
+    }
+
+    // NOTIFICATIONS
+    match /notifications/{notificationId} {
+      allow read: if isSignedIn() && (resource.data.recipientUserId == request.auth.uid || isAdmin());
+      allow create: if isSignedIn() && isUserActive();
+      allow update: if isSignedIn() && resource.data.recipientUserId == request.auth.uid &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['isRead']);
+      allow delete: if isSignedIn() && (resource.data.recipientUserId == request.auth.uid || isAdmin());
+    }
+
+    // ANNOUNCEMENTS
+    match /announcements/{announcementId} {
+      allow read: if isSignedIn() && isUserActive();
+      allow create, update, delete: if isAdmin();
+    }
+
+    // ACTIVITY LOGS
+    match /activityLogs/{logId} {
+      allow read: if isSignedIn() && (isAdmin() || resource.data.userId == request.auth.uid);
+      allow create: if isSignedIn() && isUserActive();
+      allow update, delete: if false; // Immutable audit trail
+    }
+
+    // SETTINGS (Company & Invoice)
+    match /settings/{settingDoc} {
+      allow read: if isSignedIn() && isUserActive();
+      allow write: if isAdmin();
+    }
+
+    // COUNTERS (For atomic invoice numbering)
+    match /counters/{counterId} {
+      allow read: if isSignedIn() && isUserActive();
+      allow write: if isSignedIn() && isUserActive();
+    }
+  }
+}
