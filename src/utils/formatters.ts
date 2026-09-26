@@ -18,19 +18,50 @@ export function formatCurrency(amount: number = 0, currencySymbol: string = '₹
   return `${isNegative ? '-' : ''}${currencySymbol}${result}`;
 }
 
-export function formatDate(dateString?: string): string {
+const INVOICE_MONTHS = [
+  'Jan',
+  'Feb',
+  'Mar',
+  'Apr',
+  'May',
+  'June',
+  'July',
+  'Aug',
+  'Sept',
+  'Oct',
+  'Nov',
+  'Dec',
+];
+
+export function formatInvoiceDate(dateString?: string): string {
   if (!dateString) return '-';
-  try {
-    const d = new Date(dateString);
-    if (isNaN(d.getTime())) return dateString;
-    return d.toLocaleDateString('en-IN', {
-      day: '2-digit',
-      month: 'short',
-      year: 'numeric',
-    });
-  } catch {
-    return dateString;
+  const trimmed = String(dateString).trim();
+  
+  // Directly parse YYYY-MM-DD to avoid timezone shift
+  const isoMatch = /^(\d{4})-(\d{1,2})-(\d{1,2})/.exec(trimmed);
+  if (isoMatch) {
+    const year = isoMatch[1];
+    const monthIndex = parseInt(isoMatch[2], 10) - 1;
+    const day = parseInt(isoMatch[3], 10);
+    if (monthIndex >= 0 && monthIndex < 12) {
+      return `${day} ${INVOICE_MONTHS[monthIndex]} ${year}`;
+    }
   }
+
+  try {
+    const d = new Date(trimmed);
+    if (isNaN(d.getTime())) return trimmed;
+    const day = d.getDate();
+    const month = INVOICE_MONTHS[d.getMonth()];
+    const year = d.getFullYear();
+    return `${day} ${month} ${year}`;
+  } catch {
+    return trimmed;
+  }
+}
+
+export function formatDate(dateString?: string): string {
+  return formatInvoiceDate(dateString);
 }
 
 export function numberToWords(num: number): string {

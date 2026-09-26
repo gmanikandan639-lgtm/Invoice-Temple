@@ -49,6 +49,7 @@ export const DEFAULT_INVOICE_SETTINGS: InvoiceSettings = {
   showHsnSac: false,
   showUnit: false,
   showDiscount: false,
+  showShipping: true,
   showGst: false,
   showCgst: false,
   showSgst: false,

@@ -39,6 +39,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ initialTab = 'compan
     showHsnSac: invoiceSettings?.showHsnSac !== false,
     showUnit: invoiceSettings?.showUnit !== false,
     showDiscount: invoiceSettings?.showDiscount !== false,
+    showShipping: invoiceSettings?.showShipping !== false,
     showGst: invoiceSettings?.showGst !== false,
     showDescription: invoiceSettings?.showDescription !== false,
     defaultNotes: invoiceSettings?.defaultNotes || '',
@@ -54,6 +55,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ initialTab = 'compan
         showHsnSac: invoiceSettings.showHsnSac !== false,
         showUnit: invoiceSettings.showUnit !== false,
         showDiscount: invoiceSettings.showDiscount !== false,
+        showShipping: invoiceSettings.showShipping !== false,
         showGst: invoiceSettings.showGst !== false,
         showDescription: invoiceSettings.showDescription !== false,
         defaultNotes: invoiceSettings.defaultNotes || '',
@@ -465,7 +467,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ initialTab = 'compan
                   <div className="pr-4">
                     <p className="text-xs font-bold text-slate-900">Discount Column &amp; Calculation</p>
                     <p className="text-[11px] text-slate-500 mt-0.5">
-                      Enable line-item discounts (% or flat amount)
+                      Enable line-item and overall invoice discounts
                     </p>
                   </div>
                   <label className="relative inline-flex items-center cursor-pointer shrink-0">
@@ -473,6 +475,25 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ initialTab = 'compan
                       type="checkbox"
                       checked={invSettingsData.showDiscount}
                       onChange={(e) => setInvSettingsData((prev) => ({ ...prev, showDiscount: e.target.checked }))}
+                      className="sr-only peer"
+                    />
+                    <div className="w-9 h-5 bg-slate-300 peer-focus:outline-hidden rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-amber-500"></div>
+                  </label>
+                </div>
+
+                {/* Shipping */}
+                <div className="flex items-start justify-between p-3.5 rounded-xl border border-slate-200 bg-slate-50/70 hover:bg-slate-50 transition-colors">
+                  <div className="pr-4">
+                    <p className="text-xs font-bold text-slate-900">Shipping Charges</p>
+                    <p className="text-[11px] text-slate-500 mt-0.5">
+                      Enable shipping charge field &amp; calculation
+                    </p>
+                  </div>
+                  <label className="relative inline-flex items-center cursor-pointer shrink-0">
+                    <input
+                      type="checkbox"
+                      checked={invSettingsData.showShipping}
+                      onChange={(e) => setInvSettingsData((prev) => ({ ...prev, showShipping: e.target.checked }))}
                       className="sr-only peer"
                     />
                     <div className="w-9 h-5 bg-slate-300 peer-focus:outline-hidden rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-amber-500"></div>

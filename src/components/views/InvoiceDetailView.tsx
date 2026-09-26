@@ -13,11 +13,14 @@ import {
   AlertTriangle,
   Edit2,
   Bookmark,
+  FileDown,
+  Image as ImageIcon,
 } from 'lucide-react';
 import { useData } from '../../context/DataContext';
 import { useAuth } from '../../context/AuthContext';
 import { InvoiceTemplate, PaymentMode, getUserDisplayName } from '../../types';
-import { formatCurrency, formatDate, numberToWordsIndian } from '../../utils/formatters';
+import { formatCurrency, formatDate, formatInvoiceDate, numberToWordsIndian } from '../../utils/formatters';
+import { downloadInvoiceImage, downloadInvoicePdf } from '../../utils/exportInvoice';
 import { Badge } from '../common/Badge';
 import { Modal } from '../common/Modal';
 import { useToast } from '../common/Toast';
@@ -39,6 +42,7 @@ export const InvoiceDetailView: React.FC<InvoiceDetailViewProps> = ({
     showHsnSac = true,
     showUnit = true,
     showDiscount = true,
+    showShipping = true,
     showGst = true,
     showDescription = true,
   } = invoiceSettings || {};
@@ -49,6 +53,9 @@ export const InvoiceDetailView: React.FC<InvoiceDetailViewProps> = ({
   const [template, setTemplate] = useState<InvoiceTemplate>(
     invoice?.template || 'classic'
   );
+
+  // Export state
+  const [isExporting, setIsExporting] = useState(false);
 
   // Record Payment Modal state
   const [paymentModalOpen, setPaymentModalOpen] = useState(false);
@@ -83,9 +90,37 @@ export const InvoiceDetailView: React.FC<InvoiceDetailViewProps> = ({
   // Related payments for this invoice
   const invoicePayments = payments.filter((p) => p.invoiceId === invoice.id);
 
-  // Handle Print / PDF
+  // Handle Print
   const handlePrint = () => {
     window.print();
+  };
+
+  // Handle PDF Download (captures authoritative preview)
+  const handleDownloadPdf = async () => {
+    try {
+      setIsExporting(true);
+      showToast('Generating high-resolution PDF...');
+      await downloadInvoicePdf('invoice-print-area', invoice.invoiceNumber);
+      showToast('PDF downloaded successfully!');
+    } catch (err: any) {
+      showToast('Failed to generate PDF: ' + err.message, 'error');
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  // Handle Image Download (captures authoritative preview)
+  const handleDownloadImage = async () => {
+    try {
+      setIsExporting(true);
+      showToast('Generating invoice image...');
+      await downloadInvoiceImage('invoice-print-area', invoice.invoiceNumber);
+      showToast('Invoice image downloaded successfully!');
+    } catch (err: any) {
+      showToast('Failed to generate image: ' + err.message, 'error');
+    } finally {
+      setIsExporting(false);
+    }
   };
 
   // Copy shareable link
@@ -190,14 +225,14 @@ export const InvoiceDetailView: React.FC<InvoiceDetailViewProps> = ({
 
         {/* Action Buttons */}
         <div className="flex flex-wrap items-center gap-2">
-          {/* Edit Draft Button */}
-          {invoice.invoiceStatus === 'Draft' && (
+          {/* Edit Invoice Button */}
+          {invoice.invoiceStatus !== 'Cancelled' && (
             <button
               onClick={() => onNavigate(`/invoices/edit/${invoice.id}`)}
               className="flex items-center gap-1.5 px-3 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-bold rounded-xl shadow-xs transition-colors cursor-pointer"
             >
               <Edit2 className="w-3.5 h-3.5" />
-              Continue Editing
+              {invoice.invoiceStatus === 'Draft' ? 'Continue Editing' : 'Edit Invoice'}
             </button>
           )}
 
@@ -243,13 +278,36 @@ export const InvoiceDetailView: React.FC<InvoiceDetailViewProps> = ({
             </button>
           )}
 
-          {/* Print / PDF Button */}
+          {/* Print Button */}
           <button
             onClick={handlePrint}
             className="flex items-center gap-1.5 px-3 py-2 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded-xl shadow-xs transition-colors cursor-pointer"
+            title="Print invoice"
           >
             <Printer className="w-4 h-4" />
-            Print / PDF
+            Print
+          </button>
+
+          {/* Download PDF Button */}
+          <button
+            onClick={handleDownloadPdf}
+            disabled={isExporting}
+            className="flex items-center gap-1.5 px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-bold rounded-xl transition-colors cursor-pointer disabled:opacity-50"
+            title="Export high-resolution PDF"
+          >
+            <FileDown className="w-4 h-4 text-rose-600" />
+            PDF
+          </button>
+
+          {/* Download Image Button */}
+          <button
+            onClick={handleDownloadImage}
+            disabled={isExporting}
+            className="flex items-center gap-1.5 px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-bold rounded-xl transition-colors cursor-pointer disabled:opacity-50"
+            title="Export PNG Image"
+          >
+            <ImageIcon className="w-4 h-4 text-blue-600" />
+            Image
           </button>
 
           {/* Share button */}
@@ -342,11 +400,16 @@ export const InvoiceDetailView: React.FC<InvoiceDetailViewProps> = ({
                 </span>
                 <p className="text-lg font-black text-slate-900 mt-2">{invoice.invoiceNumber}</p>
                 <p className="text-xs text-slate-600">
-                  <strong>Date:</strong> {formatDate(invoice.invoiceDate)}
+                  <strong>Date:</strong> {formatInvoiceDate(invoice.invoiceDate)}
                 </p>
                 <p className="text-xs text-slate-600">
-                  <strong>Due Date:</strong> {formatDate(invoice.dueDate)}
+                  <strong>Due Date:</strong> {formatInvoiceDate(invoice.dueDate)}
                 </p>
+                {invoice.deliveryNote && (
+                  <p className="text-xs text-slate-600">
+                    <strong>Delivery Note:</strong> {invoice.deliveryNote}
+                  </p>
+                )}
                 {invoice.poNumber && (
                   <p className="text-xs text-slate-600">
                     <strong>PO No:</strong> {invoice.poNumber}
@@ -358,7 +421,7 @@ export const InvoiceDetailView: React.FC<InvoiceDetailViewProps> = ({
               </div>
             </div>
 
-            {/* Bill To & Ship To */}
+            {/* Bill To & TAX INVOICE Details */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 bg-slate-50/70 p-5 rounded-2xl border border-slate-200/60">
               <div>
                 <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">
@@ -384,20 +447,32 @@ export const InvoiceDetailView: React.FC<InvoiceDetailViewProps> = ({
               </div>
 
               <div>
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">
-                  Shipped To
+                <p className="text-[10px] font-bold text-slate-900 uppercase tracking-wider mb-1.5">
+                  TAX INVOICE
                 </p>
-                <h4 className="text-sm font-bold text-slate-900">
-                  {invoice.customerSnapshot?.customerName}
-                </h4>
-                <p className="text-xs text-slate-600 mt-1 leading-relaxed">
-                  {invoice.customerSnapshot?.shippingAddress || invoice.customerSnapshot?.billingAddress}
-                  <br />
-                  {invoice.customerSnapshot?.city}, {invoice.customerSnapshot?.state} - {invoice.customerSnapshot?.pincode}
-                </p>
-                <div className="text-xs text-slate-600 mt-2">
-                  <p><strong>State Code:</strong> {invoice.customerSnapshot?.stateCode || '-'}</p>
-                  <p><strong>Sales Representative:</strong> {invoice.salesperson || invoice.createdByName}</p>
+                <div className="space-y-1 text-xs text-slate-700">
+                  <p>
+                    <strong className="text-slate-900">Invoice Number:</strong> {invoice.invoiceNumber}
+                  </p>
+                  <p>
+                    <strong className="text-slate-900">Invoice Date:</strong> {formatInvoiceDate(invoice.invoiceDate)}
+                  </p>
+                  <p>
+                    <strong className="text-slate-900">Due Date:</strong> {formatInvoiceDate(invoice.dueDate)}
+                  </p>
+                  <p>
+                    <strong className="text-slate-900">Delivery Note:</strong> {invoice.deliveryNote || '-'}
+                  </p>
+                  {invoice.poNumber && (
+                    <p>
+                      <strong className="text-slate-900">PO No:</strong> {invoice.poNumber}
+                    </p>
+                  )}
+                  {invoice.placeOfSupply && (
+                    <p>
+                      <strong className="text-slate-900">Place of Supply:</strong> {invoice.placeOfSupply}
+                    </p>
+                  )}
                 </div>
               </div>
             </div>
@@ -532,64 +607,63 @@ export const InvoiceDetailView: React.FC<InvoiceDetailViewProps> = ({
                 )}
               </div>
 
-              {/* Totals Summary */}
+              {/* Invoice Financial Summary */}
               <div className="sm:col-span-5 space-y-2 text-xs">
+                <div className="pb-1 border-b border-slate-200">
+                  <span className="text-xs font-bold uppercase tracking-wider text-slate-900">
+                    Invoice Financial Summary
+                  </span>
+                </div>
+
                 <div className="flex justify-between py-1 border-b border-slate-100">
-                  <span className="text-slate-600">Subtotal:</span>
+                  <span className="text-slate-600">Subtotal</span>
                   <span className="font-semibold text-slate-800">{formatCurrency(invoice.subtotal)}</span>
                 </div>
 
-                {invoice.discount > 0 && (
+                {showDiscount && (invoice.discount > 0 || (invoiceSettings?.showDiscount !== false && invoice.discount > 0)) && (
                   <div className="flex justify-between py-1 border-b border-slate-100 text-amber-600">
-                    <span>Discount:</span>
+                    <span>Discount</span>
                     <span className="font-semibold">-{formatCurrency(invoice.discount)}</span>
                   </div>
                 )}
 
-                {showGst && (invoice.cgst > 0 || invoice.sgst > 0 || invoice.igst > 0) && (
-                  <>
-                    <div className="flex justify-between py-1 border-b border-slate-100">
-                      <span className="text-slate-600">Taxable Value:</span>
-                      <span className="font-semibold text-slate-800">{formatCurrency(invoice.taxableAmount)}</span>
-                    </div>
-
-                    {isInterState ? (
-                      <div className="flex justify-between py-1 border-b border-slate-100">
-                        <span className="text-slate-600">IGST:</span>
-                        <span className="font-semibold text-slate-800">{formatCurrency(invoice.igst)}</span>
-                      </div>
-                    ) : (
-                      <>
-                        <div className="flex justify-between py-1 border-b border-slate-100">
-                          <span className="text-slate-600">CGST:</span>
-                          <span className="font-semibold text-slate-800">{formatCurrency(invoice.cgst)}</span>
-                        </div>
-                        <div className="flex justify-between py-1 border-b border-slate-100">
-                          <span className="text-slate-600">SGST:</span>
-                          <span className="font-semibold text-slate-800">{formatCurrency(invoice.sgst)}</span>
-                        </div>
-                      </>
-                    )}
-                  </>
+                {showShipping && ((invoice.shipping || 0) > 0 || (invoiceSettings?.showShipping !== false && (invoice.shipping || 0) > 0)) && (
+                  <div className="flex justify-between py-1 border-b border-slate-100 text-slate-700">
+                    <span>Shipping</span>
+                    <span className="font-semibold">{formatCurrency(invoice.shipping || 0)}</span>
+                  </div>
                 )}
 
-                <div className="flex justify-between py-1 border-b border-slate-100 text-slate-500">
-                  <span>Round Off:</span>
-                  <span>{formatCurrency(invoice.roundOff)}</span>
-                </div>
+                {showGst && ((invoice.tax !== undefined ? invoice.tax : (invoice.cgst + invoice.sgst + invoice.igst || 0)) > 0) && (
+                  <div className="flex justify-between py-1 border-b border-slate-100 text-slate-700">
+                    <span>Tax</span>
+                    <span className="font-semibold">
+                      {formatCurrency(invoice.tax !== undefined ? invoice.tax : (invoice.cgst + invoice.sgst + invoice.igst || 0))}
+                    </span>
+                  </div>
+                )}
+
+                {invoice.roundOff !== 0 && (
+                  <div className="flex justify-between py-1 border-b border-slate-100 text-slate-500">
+                    <span>Round Off:</span>
+                    <span>{formatCurrency(invoice.roundOff)}</span>
+                  </div>
+                )}
 
                 <div className="flex justify-between py-2 border-b-2 border-slate-900 text-sm font-black text-slate-950">
-                  <span>Total Payable:</span>
+                  <span>Grand Total</span>
                   <span className="text-base text-slate-900">{formatCurrency(invoice.grandTotal)}</span>
                 </div>
 
-                <div className="flex justify-between py-1 text-emerald-700">
-                  <span>Amount Paid:</span>
-                  <span className="font-semibold">{formatCurrency(invoice.amountPaid)}</span>
-                </div>
+                {invoice.amountPaid > 0 && (
+                  <div className="flex justify-between py-1 text-emerald-700">
+                    <span>Amount Paid</span>
+                    <span className="font-semibold">{formatCurrency(invoice.amountPaid)}</span>
+                  </div>
+                )}
 
                 <div className="flex justify-between py-1 text-slate-900 font-bold bg-amber-50 px-2 rounded-lg">
-                  <span>Balance Due:</span>
+                  <span>Balance Due</span>
                   <span>{formatCurrency(invoice.balanceAmount)}</span>
                 </div>
               </div>
@@ -662,8 +736,9 @@ export const InvoiceDetailView: React.FC<InvoiceDetailViewProps> = ({
                 </span>
                 <p className="text-lg font-black">{invoice.invoiceNumber}</p>
                 <div className="text-xs text-slate-300 mt-2 space-y-0.5">
-                  <p>Issue Date: {formatDate(invoice.invoiceDate)}</p>
-                  <p>Due Date: {formatDate(invoice.dueDate)}</p>
+                  <p>Issue Date: {formatInvoiceDate(invoice.invoiceDate)}</p>
+                  <p>Due Date: {formatInvoiceDate(invoice.dueDate)}</p>
+                  {invoice.deliveryNote && <p>Delivery Note: {invoice.deliveryNote}</p>}
                   <p>POS: {invoice.placeOfSupply}</p>
                 </div>
               </div>
@@ -691,29 +766,16 @@ export const InvoiceDetailView: React.FC<InvoiceDetailViewProps> = ({
                 </p>
               </div>
 
-              <div className="sm:border-l sm:border-slate-200 sm:pl-6">
+              <div className="sm:border-l sm:border-slate-200 sm:pl-6 space-y-1 text-xs text-slate-700">
                 <span className="text-[10px] font-bold text-amber-600 uppercase tracking-wider block mb-1">
-                  Payment Status &amp; Terms
+                  TAX INVOICE
                 </span>
-                <div className="mt-1">
-                  <Badge
-                    variant={
-                      invoice.paymentStatus === 'Paid'
-                        ? 'success'
-                        : invoice.paymentStatus === 'Partially Paid'
-                        ? 'info'
-                        : 'warning'
-                    }
-                  >
-                    {invoice.paymentStatus}
-                  </Badge>
-                </div>
-                <p className="text-xs text-slate-600 mt-2">
-                  <strong>Terms:</strong> {invoice.paymentTerms}
-                </p>
-                <p className="text-xs text-slate-600">
-                  <strong>Representative:</strong> {invoice.salesperson}
-                </p>
+                <p><strong className="text-slate-900">Invoice Number:</strong> {invoice.invoiceNumber}</p>
+                <p><strong className="text-slate-900">Invoice Date:</strong> {formatInvoiceDate(invoice.invoiceDate)}</p>
+                <p><strong className="text-slate-900">Due Date:</strong> {formatInvoiceDate(invoice.dueDate)}</p>
+                <p><strong className="text-slate-900">Delivery Note:</strong> {invoice.deliveryNote || '-'}</p>
+                {invoice.poNumber && <p><strong className="text-slate-900">PO No:</strong> {invoice.poNumber}</p>}
+                {invoice.placeOfSupply && <p><strong className="text-slate-900">Place of Supply:</strong> {invoice.placeOfSupply}</p>}
               </div>
             </div>
 
@@ -772,47 +834,45 @@ export const InvoiceDetailView: React.FC<InvoiceDetailViewProps> = ({
               </div>
 
               <div className="bg-slate-50 p-6 rounded-2xl border border-slate-100 text-xs space-y-2">
+                <div className="pb-1 border-b border-slate-200">
+                  <span className="text-xs font-bold uppercase tracking-wider text-slate-900">
+                    Invoice Financial Summary
+                  </span>
+                </div>
                 <div className="flex justify-between text-slate-600">
-                  <span>Subtotal:</span>
+                  <span>Subtotal</span>
                   <span className="font-bold text-slate-900">{formatCurrency(invoice.subtotal)}</span>
                 </div>
-                {invoice.discount > 0 && (
+                {showDiscount && (invoice.discount > 0 || (invoiceSettings?.showDiscount !== false && invoice.discount > 0)) && (
                   <div className="flex justify-between text-amber-600 font-semibold">
-                    <span>Discount:</span>
+                    <span>Discount</span>
                     <span>-{formatCurrency(invoice.discount)}</span>
                   </div>
                 )}
-                {showGst && (invoice.cgst > 0 || invoice.sgst > 0 || invoice.igst > 0) && (
-                  <>
-                    <div className="flex justify-between text-slate-600">
-                      <span>Taxable:</span>
-                      <span className="font-bold text-slate-900">{formatCurrency(invoice.taxableAmount)}</span>
-                    </div>
-                    {isInterState ? (
-                      <div className="flex justify-between text-slate-600">
-                        <span>IGST:</span>
-                        <span>{formatCurrency(invoice.igst)}</span>
-                      </div>
-                    ) : (
-                      <>
-                        <div className="flex justify-between text-slate-600">
-                          <span>CGST:</span>
-                          <span>{formatCurrency(invoice.cgst)}</span>
-                        </div>
-                        <div className="flex justify-between text-slate-600">
-                          <span>SGST:</span>
-                          <span>{formatCurrency(invoice.sgst)}</span>
-                        </div>
-                      </>
-                    )}
-                  </>
+                {showShipping && ((invoice.shipping || 0) > 0 || (invoiceSettings?.showShipping !== false && (invoice.shipping || 0) > 0)) && (
+                  <div className="flex justify-between text-slate-700 font-semibold">
+                    <span>Shipping</span>
+                    <span>{formatCurrency(invoice.shipping || 0)}</span>
+                  </div>
+                )}
+                {showGst && ((invoice.tax !== undefined ? invoice.tax : (invoice.cgst + invoice.sgst + invoice.igst || 0)) > 0) && (
+                  <div className="flex justify-between text-slate-700 font-semibold">
+                    <span>Tax</span>
+                    <span>{formatCurrency(invoice.tax !== undefined ? invoice.tax : (invoice.cgst + invoice.sgst + invoice.igst || 0))}</span>
+                  </div>
                 )}
                 <div className="flex justify-between text-base font-black text-slate-900 pt-2 border-t border-slate-200">
-                  <span>Grand Total:</span>
+                  <span>Grand Total</span>
                   <span className="text-amber-600">{formatCurrency(invoice.grandTotal)}</span>
                 </div>
+                {invoice.amountPaid > 0 && (
+                  <div className="flex justify-between text-xs font-semibold text-emerald-700 pt-1">
+                    <span>Amount Paid</span>
+                    <span>{formatCurrency(invoice.amountPaid)}</span>
+                  </div>
+                )}
                 <div className="flex justify-between text-xs font-semibold text-slate-700 pt-1">
-                  <span>Balance Due:</span>
+                  <span>Balance Due</span>
                   <span className="text-rose-600">{formatCurrency(invoice.balanceAmount)}</span>
                 </div>
               </div>
@@ -866,17 +926,28 @@ export const InvoiceDetailView: React.FC<InvoiceDetailViewProps> = ({
               <div className="text-right">
                 <h2 className="font-black text-base">TAX INVOICE</h2>
                 <p><strong>Inv No:</strong> {invoice.invoiceNumber}</p>
-                <p><strong>Date:</strong> {formatDate(invoice.invoiceDate)}</p>
+                <p><strong>Date:</strong> {formatInvoiceDate(invoice.invoiceDate)}</p>
+                <p><strong>Due Date:</strong> {formatInvoiceDate(invoice.dueDate)}</p>
+                <p><strong>Delivery Note:</strong> {invoice.deliveryNote || '-'}</p>
                 <p><strong>Place of Supply:</strong> {invoice.placeOfSupply}</p>
               </div>
             </div>
 
-            {/* Boxed Customer */}
-            <div className="border border-slate-900 p-3">
-              <p className="font-bold uppercase text-[10px]">Buyer Details:</p>
-              <p className="font-bold">{invoice.customerSnapshot?.customerName} ({invoice.customerSnapshot?.companyName})</p>
-              <p>{invoice.customerSnapshot?.billingAddress}, {invoice.customerSnapshot?.state}</p>
-              <p><strong>GSTIN:</strong> {invoice.customerSnapshot?.gstin || 'Unregistered'}</p>
+            {/* Boxed Customer & TAX INVOICE */}
+            <div className="border border-slate-900 p-3 grid grid-cols-2 gap-2">
+              <div>
+                <p className="font-bold uppercase text-[10px]">Buyer Details (Billed To):</p>
+                <p className="font-bold">{invoice.customerSnapshot?.customerName} {invoice.customerSnapshot?.companyName ? `(${invoice.customerSnapshot.companyName})` : ''}</p>
+                <p>{invoice.customerSnapshot?.billingAddress}, {invoice.customerSnapshot?.state}</p>
+                <p><strong>GSTIN:</strong> {invoice.customerSnapshot?.gstin || 'Unregistered'}</p>
+              </div>
+              <div className="text-right space-y-0.5">
+                <p className="font-bold uppercase text-[10px] text-slate-900">TAX INVOICE</p>
+                <p><strong>Invoice Number:</strong> {invoice.invoiceNumber}</p>
+                <p><strong>Invoice Date:</strong> {formatInvoiceDate(invoice.invoiceDate)}</p>
+                <p><strong>Due Date:</strong> {formatInvoiceDate(invoice.dueDate)}</p>
+                <p><strong>Delivery Note:</strong> {invoice.deliveryNote || '-'}</p>
+              </div>
             </div>
 
             {/* Boxed Items Table */}
@@ -922,24 +993,28 @@ export const InvoiceDetailView: React.FC<InvoiceDetailViewProps> = ({
                 <p className="mt-2 text-[10px] italic">Amount in words: {numberToWordsIndian(invoice.grandTotal)}</p>
               </div>
               <div className="text-right space-y-1">
+                <p className="font-bold uppercase text-[10px] text-slate-700 border-b border-slate-900 pb-0.5 mb-1">
+                  Invoice Financial Summary
+                </p>
                 <p>Subtotal: <strong>{formatCurrency(invoice.subtotal)}</strong></p>
-                {invoice.discount > 0 && <p className="text-amber-700">Discount: <strong>-{formatCurrency(invoice.discount)}</strong></p>}
-                {showGst && (invoice.cgst > 0 || invoice.sgst > 0 || invoice.igst > 0) && (
-                  <>
-                    <p>Taxable: <strong>{formatCurrency(invoice.taxableAmount)}</strong></p>
-                    {isInterState ? (
-                      <p>IGST: <strong>{formatCurrency(invoice.igst)}</strong></p>
-                    ) : (
-                      <>
-                        <p>CGST: <strong>{formatCurrency(invoice.cgst)}</strong></p>
-                        <p>SGST: <strong>{formatCurrency(invoice.sgst)}</strong></p>
-                      </>
-                    )}
-                  </>
+                {showDiscount && (invoice.discount > 0 || (invoiceSettings?.showDiscount !== false && invoice.discount > 0)) && (
+                  <p className="text-amber-700">Discount: <strong>-{formatCurrency(invoice.discount)}</strong></p>
+                )}
+                {showShipping && ((invoice.shipping || 0) > 0 || (invoiceSettings?.showShipping !== false && (invoice.shipping || 0) > 0)) && (
+                  <p className="text-slate-800">Shipping: <strong>{formatCurrency(invoice.shipping || 0)}</strong></p>
+                )}
+                {showGst && ((invoice.tax !== undefined ? invoice.tax : (invoice.cgst + invoice.sgst + invoice.igst || 0)) > 0) && (
+                  <p className="text-slate-800">
+                    Tax: <strong>{formatCurrency(invoice.tax !== undefined ? invoice.tax : (invoice.cgst + invoice.sgst + invoice.igst || 0))}</strong>
+                  </p>
                 )}
                 <p className="text-sm font-black border-t border-slate-900 pt-1">
                   Grand Total: {formatCurrency(invoice.grandTotal)}
                 </p>
+                {invoice.amountPaid > 0 && (
+                  <p className="text-emerald-700">Amount Paid: <strong>{formatCurrency(invoice.amountPaid)}</strong></p>
+                )}
+                <p className="text-xs font-bold text-rose-700">Balance Due: <strong>{formatCurrency(invoice.balanceAmount)}</strong></p>
               </div>
             </div>
 

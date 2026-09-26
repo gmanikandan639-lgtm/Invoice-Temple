@@ -117,6 +117,7 @@ export interface Invoice {
   paymentTerms: string;
   poNumber?: string;
   referenceNumber?: string;
+  deliveryNote?: string;
   placeOfSupply: string;
   salesperson?: string;
   customerId: string;
@@ -124,6 +125,8 @@ export interface Invoice {
   items: InvoiceItem[];
   subtotal: number;
   discount: number;
+  shipping?: number;
+  tax?: number;
   taxableAmount: number;
   cgst: number;
   sgst: number;
@@ -260,6 +263,7 @@ export interface InvoiceSettings {
   showHsnSac?: boolean; // Default false (Hide)
   showUnit?: boolean; // Default false (Hide)
   showDiscount?: boolean; // Default false (Hide)
+  showShipping?: boolean; // Default true (Show)
   showGst?: boolean; // Default false (Hide)
   showCgst?: boolean; // Sub-control for CGST
   showSgst?: boolean; // Sub-control for SGST
