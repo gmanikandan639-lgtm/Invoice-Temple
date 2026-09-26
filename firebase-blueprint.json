@@ -2,21 +2,28 @@
   "entities": {
     "user": {
       "title": "User",
-      "description": "User profile with role-based permissions and account status",
+      "description": "User profile with personalised names, contact information, role-based permissions and account status",
       "type": "object",
       "properties": {
         "uid": { "type": "string", "maxLength": 128 },
         "name": { "type": "string", "maxLength": 100 },
+        "displayName": { "type": "string", "maxLength": 100 },
+        "preferredName": { "type": "string", "maxLength": 100 },
         "email": { "type": "string", "format": "email", "maxLength": 120 },
-        "phone": { "type": "string", "maxLength": 20 },
+        "phone": { "type": "string", "maxLength": 30 },
+        "companyName": { "type": "string", "maxLength": 150 },
+        "designation": { "type": "string", "maxLength": 100 },
+        "signatureUrl": { "type": "string", "maxLength": 50000 },
+        "themePreference": { "type": "string", "maxLength": 50 },
         "role": { "type": "string", "enum": ["admin", "user"] },
         "status": { "type": "string", "enum": ["active", "disabled"] },
-        "photoURL": { "type": "string", "maxLength": 500 },
+        "photoURL": { "type": "string", "maxLength": 50000 },
+        "profilePhoto": { "type": "string", "maxLength": 50000 },
         "createdAt": { "type": "string" },
         "updatedAt": { "type": "string" },
         "lastLoginAt": { "type": "string" }
       },
-      "required": ["uid", "name", "email", "role", "status"]
+      "required": ["uid", "email", "role", "status"]
     },
     "customer": {
       "title": "Customer",

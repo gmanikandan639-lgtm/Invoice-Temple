@@ -15,6 +15,8 @@ import {
   Trash2,
 } from 'lucide-react';
 import { useData } from '../../context/DataContext';
+import { useAuth } from '../../context/AuthContext';
+import { getUserDisplayName } from '../../types';
 import { formatCurrency, formatDate } from '../../utils/formatters';
 import { Badge } from '../common/Badge';
 import {
@@ -40,6 +42,7 @@ interface AdminDashboardViewProps {
 }
 
 export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({ onNavigate }) => {
+  const { currentUser } = useAuth();
   const {
     invoices,
     customers,
@@ -187,6 +190,12 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({ onNaviga
       {/* Top Banner with Quick Actions & Seed controls */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs">
         <div>
+          <div className="flex items-center gap-2 mb-0.5">
+            <span className="text-xs font-bold text-amber-600 bg-amber-50 px-2 py-0.5 rounded-md border border-amber-200">
+              Welcome, {getUserDisplayName(currentUser)}
+            </span>
+            <span className="text-[11px] text-slate-400 font-medium">Administrator</span>
+          </div>
           <h1 className="text-xl font-extrabold text-slate-900 tracking-tight">
             Financial &amp; Operations Overview
           </h1>

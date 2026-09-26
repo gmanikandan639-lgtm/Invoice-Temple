@@ -51,6 +51,8 @@ export const AdminUserListView: React.FC<AdminUserListViewProps> = ({ onNavigate
   // Filtered Users
   const filteredUsers = useMemo(() => {
     return users.filter((u) => {
+      // Ensure only admin and user roles are shown
+      if (u.role !== 'admin' && u.role !== 'user') return false;
       if (roleFilter !== 'All' && u.role !== roleFilter) return false;
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase();
@@ -94,6 +96,10 @@ export const AdminUserListView: React.FC<AdminUserListViewProps> = ({ onNavigate
 
     try {
       if (editingUser) {
+        if (editingUser.uid === currentUser?.uid && role !== 'admin') {
+          showToast('You cannot remove your own admin privileges', 'error');
+          return;
+        }
         await updateUser(editingUser.id, {
           name,
           phone,
@@ -196,9 +202,9 @@ export const AdminUserListView: React.FC<AdminUserListViewProps> = ({ onNavigate
           onChange={(e) => setRoleFilter(e.target.value)}
           className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-700 focus:ring-2 focus:ring-amber-500 focus:bg-white cursor-pointer"
         >
-          <option value="All">All Roles</option>
-          <option value="admin">Administrator</option>
-          <option value="user">Billing Staff / User</option>
+          <option value="All">All Users</option>
+          <option value="admin">Admin</option>
+          <option value="user">Normal User</option>
         </select>
       </div>
 
@@ -229,12 +235,30 @@ export const AdminUserListView: React.FC<AdminUserListViewProps> = ({ onNavigate
                   <tr key={u.id} className="hover:bg-slate-50/70 transition-colors">
                     <td className="px-5 py-3.5">
                       <div className="flex items-center gap-2.5">
-                        <div className="w-8 h-8 rounded-full bg-slate-100 text-slate-800 font-bold flex items-center justify-center text-xs">
-                          {u.name.charAt(0).toUpperCase()}
+                        <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-amber-500 to-amber-300 text-slate-950 font-bold flex items-center justify-center text-xs overflow-hidden shrink-0 shadow-2xs">
+                          {u.profilePhoto || u.photoURL ? (
+                            <img
+                              src={u.profilePhoto || u.photoURL}
+                              alt={u.displayName || u.name}
+                              className="w-full h-full object-cover"
+                            />
+                          ) : (
+                            (u.displayName || u.name || 'U').charAt(0).toUpperCase()
+                          )}
                         </div>
                         <div>
-                          <p className="font-bold text-slate-900">{u.name}</p>
+                          <div className="flex items-center gap-1.5">
+                            <p className="font-bold text-slate-900">{u.displayName || u.name}</p>
+                            {u.preferredName && (
+                              <span className="text-[10px] bg-amber-50 text-amber-900 border border-amber-200 px-1.5 py-0.2 rounded-md font-semibold">
+                                &quot;{u.preferredName}&quot;
+                              </span>
+                            )}
+                          </div>
                           <p className="text-[10px] text-slate-400">{u.email}</p>
+                          {u.designation && (
+                            <p className="text-[9px] text-slate-500">{u.designation}</p>
+                          )}
                         </div>
                       </div>
                     </td>
@@ -247,7 +271,7 @@ export const AdminUserListView: React.FC<AdminUserListViewProps> = ({ onNavigate
                             : 'bg-slate-100 text-slate-700 border-slate-200'
                         }`}
                       >
-                        {u.role}
+                        {u.role === 'admin' ? 'Admin' : 'Normal User'}
                       </span>
                     </td>
 
@@ -366,8 +390,8 @@ export const AdminUserListView: React.FC<AdminUserListViewProps> = ({ onNavigate
                 onChange={(e) => setRole(e.target.value as UserRole)}
                 className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs bg-white"
               >
-                <option value="user">Billing Staff (User)</option>
-                <option value="admin">Administrator</option>
+                <option value="user">Normal User</option>
+                <option value="admin">Admin</option>
               </select>
             </div>
 

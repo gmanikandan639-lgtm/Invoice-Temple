@@ -16,6 +16,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useData } from '../../context/DataContext';
 import { formatCurrency, formatDate } from '../../utils/formatters';
 import { Badge } from '../common/Badge';
+import { getUserDisplayName } from '../../types';
 
 interface UserDashboardViewProps {
   onNavigate: (path: string) => void;
@@ -80,7 +81,7 @@ export const UserDashboardView: React.FC<UserDashboardViewProps> = ({ onNavigate
             Billing Workspace
           </span>
           <h1 className="text-xl sm:text-2xl font-black mt-0.5">
-            Welcome back, {currentUser?.name || 'Billing Specialist'}
+            Welcome, {getUserDisplayName(currentUser)}
           </h1>
           <p className="text-xs text-slate-400 mt-1 max-w-xl">
             Track your authorized customer accounts, draft GST invoices, and monitor collection statuses in real time.

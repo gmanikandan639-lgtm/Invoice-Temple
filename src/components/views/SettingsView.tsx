@@ -12,7 +12,7 @@ import {
 } from 'lucide-react';
 import { useData } from '../../context/DataContext';
 import { useAuth } from '../../context/AuthContext';
-import { CompanySettings, INDIAN_STATES } from '../../types';
+import { CompanySettings, InvoiceSettings, INDIAN_STATES } from '../../types';
 import { getStateCodeByName } from '../../utils/taxCalculator';
 import { useToast } from '../common/Toast';
 
@@ -21,7 +21,7 @@ interface SettingsViewProps {
 }
 
 export const SettingsView: React.FC<SettingsViewProps> = ({ initialTab = 'company' }) => {
-  const { companySettings, updateCompanySettings } = useData();
+  const { companySettings, updateCompanySettings, invoiceSettings, updateInvoiceSettings } = useData();
   const { role } = useAuth();
   const { showToast } = useToast();
 
@@ -35,6 +35,35 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ initialTab = 'compan
 
   // Local state initialized with current settings
   const [formData, setFormData] = useState<CompanySettings>({ ...companySettings });
+  const [invSettingsData, setInvSettingsData] = useState<InvoiceSettings>({
+    showHsnSac: invoiceSettings?.showHsnSac !== false,
+    showUnit: invoiceSettings?.showUnit !== false,
+    showDiscount: invoiceSettings?.showDiscount !== false,
+    showGst: invoiceSettings?.showGst !== false,
+    showDescription: invoiceSettings?.showDescription !== false,
+    defaultNotes: invoiceSettings?.defaultNotes || '',
+    defaultTerms: invoiceSettings?.defaultTerms || '',
+    autoRoundOff: invoiceSettings?.autoRoundOff ?? true,
+    prefix: invoiceSettings?.prefix || '',
+    nextNumber: invoiceSettings?.nextNumber || 1,
+  });
+
+  React.useEffect(() => {
+    if (invoiceSettings) {
+      setInvSettingsData({
+        showHsnSac: invoiceSettings.showHsnSac !== false,
+        showUnit: invoiceSettings.showUnit !== false,
+        showDiscount: invoiceSettings.showDiscount !== false,
+        showGst: invoiceSettings.showGst !== false,
+        showDescription: invoiceSettings.showDescription !== false,
+        defaultNotes: invoiceSettings.defaultNotes || '',
+        defaultTerms: invoiceSettings.defaultTerms || '',
+        autoRoundOff: invoiceSettings.autoRoundOff ?? true,
+        prefix: invoiceSettings.prefix || '',
+        nextNumber: invoiceSettings.nextNumber || 1,
+      });
+    }
+  }, [invoiceSettings]);
 
   const handleTextChange = (field: keyof CompanySettings, value: any) => {
     setFormData((prev) => ({
@@ -68,7 +97,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ initialTab = 'compan
     e.preventDefault();
     try {
       await updateCompanySettings(formData);
-      showToast('Enterprise settings updated successfully');
+      await updateInvoiceSettings(invSettingsData);
+      showToast('Settings saved successfully');
     } catch (err: any) {
       showToast('Failed to save settings: ' + err.message, 'error');
     }
@@ -369,12 +399,124 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ initialTab = 'compan
                 type="checkbox"
                 id="roundOffCheck"
                 checked={formData.enableRoundOff}
-                onChange={(e) => handleTextChange('enableRoundOff', e.target.checked)}
+                onChange={(e) => {
+                  handleTextChange('enableRoundOff', e.target.checked);
+                  setInvSettingsData((prev) => ({ ...prev, autoRoundOff: e.target.checked }));
+                }}
                 className="rounded-sm border-slate-300 text-amber-500"
               />
               <label htmlFor="roundOffCheck" className="text-xs font-bold text-slate-800 cursor-pointer">
                 Enable Automatic Round-Off (Rounds final rupee total to nearest integer)
               </label>
+            </div>
+
+            {/* Field Visibility & Calculation Settings */}
+            <div className="pt-5 mt-4 border-t border-slate-200 space-y-3">
+              <div>
+                <h4 className="text-xs font-extrabold uppercase tracking-wider text-slate-900">
+                  Invoice Columns &amp; Field Visibility Controls
+                </h4>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Toggle invoice columns on or off. Hidden columns will not appear in the invoice editor or printed invoices, and their calculations adjust automatically.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 pt-1">
+                {/* HSN/SAC */}
+                <div className="flex items-start justify-between p-3.5 rounded-xl border border-slate-200 bg-slate-50/70 hover:bg-slate-50 transition-colors">
+                  <div className="pr-4">
+                    <p className="text-xs font-bold text-slate-900">HSN / SAC Code</p>
+                    <p className="text-[11px] text-slate-500 mt-0.5">
+                      Show HSN/SAC tax classification column
+                    </p>
+                  </div>
+                  <label className="relative inline-flex items-center cursor-pointer shrink-0">
+                    <input
+                      type="checkbox"
+                      checked={invSettingsData.showHsnSac}
+                      onChange={(e) => setInvSettingsData((prev) => ({ ...prev, showHsnSac: e.target.checked }))}
+                      className="sr-only peer"
+                    />
+                    <div className="w-9 h-5 bg-slate-300 peer-focus:outline-hidden rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-amber-500"></div>
+                  </label>
+                </div>
+
+                {/* Unit */}
+                <div className="flex items-start justify-between p-3.5 rounded-xl border border-slate-200 bg-slate-50/70 hover:bg-slate-50 transition-colors">
+                  <div className="pr-4">
+                    <p className="text-xs font-bold text-slate-900">Unit of Measurement</p>
+                    <p className="text-[11px] text-slate-500 mt-0.5">
+                      Show unit selector (NOS, KGS, PCS, etc.)
+                    </p>
+                  </div>
+                  <label className="relative inline-flex items-center cursor-pointer shrink-0">
+                    <input
+                      type="checkbox"
+                      checked={invSettingsData.showUnit}
+                      onChange={(e) => setInvSettingsData((prev) => ({ ...prev, showUnit: e.target.checked }))}
+                      className="sr-only peer"
+                    />
+                    <div className="w-9 h-5 bg-slate-300 peer-focus:outline-hidden rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-amber-500"></div>
+                  </label>
+                </div>
+
+                {/* Discount */}
+                <div className="flex items-start justify-between p-3.5 rounded-xl border border-slate-200 bg-slate-50/70 hover:bg-slate-50 transition-colors">
+                  <div className="pr-4">
+                    <p className="text-xs font-bold text-slate-900">Discount Column &amp; Calculation</p>
+                    <p className="text-[11px] text-slate-500 mt-0.5">
+                      Enable line-item discounts (% or flat amount)
+                    </p>
+                  </div>
+                  <label className="relative inline-flex items-center cursor-pointer shrink-0">
+                    <input
+                      type="checkbox"
+                      checked={invSettingsData.showDiscount}
+                      onChange={(e) => setInvSettingsData((prev) => ({ ...prev, showDiscount: e.target.checked }))}
+                      className="sr-only peer"
+                    />
+                    <div className="w-9 h-5 bg-slate-300 peer-focus:outline-hidden rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-amber-500"></div>
+                  </label>
+                </div>
+
+                {/* GST / Tax */}
+                <div className="flex items-start justify-between p-3.5 rounded-xl border border-slate-200 bg-slate-50/70 hover:bg-slate-50 transition-colors">
+                  <div className="pr-4">
+                    <p className="text-xs font-bold text-slate-900">GST / Tax Calculation</p>
+                    <p className="text-[11px] text-slate-500 mt-0.5">
+                      Calculate CGST, SGST &amp; IGST taxes on items
+                    </p>
+                  </div>
+                  <label className="relative inline-flex items-center cursor-pointer shrink-0">
+                    <input
+                      type="checkbox"
+                      checked={invSettingsData.showGst}
+                      onChange={(e) => setInvSettingsData((prev) => ({ ...prev, showGst: e.target.checked }))}
+                      className="sr-only peer"
+                    />
+                    <div className="w-9 h-5 bg-slate-300 peer-focus:outline-hidden rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-amber-500"></div>
+                  </label>
+                </div>
+
+                {/* Description */}
+                <div className="flex items-start justify-between p-3.5 rounded-xl border border-slate-200 bg-slate-50/70 hover:bg-slate-50 transition-colors sm:col-span-2">
+                  <div className="pr-4">
+                    <p className="text-xs font-bold text-slate-900">Item Description Field</p>
+                    <p className="text-[11px] text-slate-500 mt-0.5">
+                      Include multiline description under item name
+                    </p>
+                  </div>
+                  <label className="relative inline-flex items-center cursor-pointer shrink-0">
+                    <input
+                      type="checkbox"
+                      checked={invSettingsData.showDescription}
+                      onChange={(e) => setInvSettingsData((prev) => ({ ...prev, showDescription: e.target.checked }))}
+                      className="sr-only peer"
+                    />
+                    <div className="w-9 h-5 bg-slate-300 peer-focus:outline-hidden rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-amber-500"></div>
+                  </label>
+                </div>
+              </div>
             </div>
           </div>
         )}

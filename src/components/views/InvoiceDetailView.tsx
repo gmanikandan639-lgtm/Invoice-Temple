@@ -16,7 +16,7 @@ import {
 } from 'lucide-react';
 import { useData } from '../../context/DataContext';
 import { useAuth } from '../../context/AuthContext';
-import { InvoiceTemplate, PaymentMode } from '../../types';
+import { InvoiceTemplate, PaymentMode, getUserDisplayName } from '../../types';
 import { formatCurrency, formatDate, numberToWordsIndian } from '../../utils/formatters';
 import { Badge } from '../common/Badge';
 import { Modal } from '../common/Modal';
@@ -31,9 +31,17 @@ export const InvoiceDetailView: React.FC<InvoiceDetailViewProps> = ({
   invoiceId,
   onNavigate,
 }) => {
-  const { invoices, companySettings, addPayment, updateInvoiceStatus, payments } = useData();
+  const { invoices, companySettings, addPayment, updateInvoiceStatus, payments, invoiceSettings } = useData();
   const { currentUser, role } = useAuth();
   const { showToast } = useToast();
+
+  const {
+    showHsnSac = true,
+    showUnit = true,
+    showDiscount = true,
+    showGst = true,
+    showDescription = true,
+  } = invoiceSettings || {};
 
   const invoice = invoices.find((inv) => inv.id === invoiceId);
 
@@ -112,7 +120,7 @@ export const InvoiceDetailView: React.FC<InvoiceDetailViewProps> = ({
         referenceNumber: paymentRef,
         notes: paymentNotes,
         createdBy: currentUser?.uid || 'user',
-        createdByName: currentUser?.name || 'Staff',
+        createdByName: getUserDisplayName(currentUser),
       });
 
       showToast(`Payment of ${formatCurrency(paymentAmount)} recorded successfully!`);
@@ -174,8 +182,8 @@ export const InvoiceDetailView: React.FC<InvoiceDetailViewProps> = ({
                   : invoice.paymentStatus}
               </Badge>
             </div>
-            <p className="text-xs text-slate-400 mt-0.5">
-              Generated on {formatDate(invoice.invoiceDate)} by {invoice.createdByName}
+            <p className="text-xs text-slate-500 mt-0.5">
+              Issued on {formatDate(invoice.invoiceDate)} &bull; Prepared By: <span className="font-bold text-slate-800">{invoice.createdByName || 'Staff'}</span>
             </p>
           </div>
         </div>
@@ -401,19 +409,19 @@ export const InvoiceDetailView: React.FC<InvoiceDetailViewProps> = ({
                   <tr className="border-b-2 border-slate-900 text-slate-900 font-bold uppercase tracking-wider text-[10px]">
                     <th className="py-2.5 pr-2 w-8">#</th>
                     <th className="py-2.5 px-2">Description of Goods / Services</th>
-                    <th className="py-2.5 px-2 w-20">HSN/SAC</th>
+                    {showHsnSac && <th className="py-2.5 px-2 w-20">HSN/SAC</th>}
                     <th className="py-2.5 px-2 w-16 text-center">Qty</th>
                     <th className="py-2.5 px-2 w-20 text-right">Rate</th>
-                    <th className="py-2.5 px-2 w-24 text-right">Taxable</th>
-                    <th className="py-2.5 px-2 w-14 text-center">GST</th>
-                    {isInterState ? (
+                    {showGst && <th className="py-2.5 px-2 w-24 text-right">Taxable</th>}
+                    {showGst && <th className="py-2.5 px-2 w-14 text-center">GST</th>}
+                    {showGst && (isInterState ? (
                       <th className="py-2.5 px-2 w-20 text-right">IGST</th>
                     ) : (
                       <>
                         <th className="py-2.5 px-2 w-16 text-right">CGST</th>
                         <th className="py-2.5 px-2 w-16 text-right">SGST</th>
                       </>
-                    )}
+                    ))}
                     <th className="py-2.5 pl-2 w-24 text-right">Total</th>
                   </tr>
                 </thead>
@@ -423,28 +431,34 @@ export const InvoiceDetailView: React.FC<InvoiceDetailViewProps> = ({
                       <td className="py-3 pr-2 text-slate-400 font-bold">{idx + 1}</td>
                       <td className="py-3 px-2">
                         <p className="font-bold text-slate-900">{item.name}</p>
-                        {item.description && (
+                        {showDescription && item.description && (
                           <p className="text-[11px] text-slate-500 mt-0.5 whitespace-pre-line">
                             {item.description}
                           </p>
                         )}
                       </td>
-                      <td className="py-3 px-2 text-slate-600 font-mono text-[11px]">
-                        {item.hsnSacCode || '-'}
-                      </td>
+                      {showHsnSac && (
+                        <td className="py-3 px-2 text-slate-600 font-mono text-[11px]">
+                          {item.hsnSacCode || '-'}
+                        </td>
+                      )}
                       <td className="py-3 px-2 text-center text-slate-800 font-semibold">
-                        {item.quantity} {item.unit}
+                        {item.quantity} {showUnit ? item.unit : ''}
                       </td>
                       <td className="py-3 px-2 text-right text-slate-800">
                         {formatCurrency(item.rate)}
                       </td>
-                      <td className="py-3 px-2 text-right font-medium text-slate-800">
-                        {formatCurrency(item.taxableAmount)}
-                      </td>
-                      <td className="py-3 px-2 text-center text-slate-700 font-semibold">
-                        {item.gstRate}%
-                      </td>
-                      {isInterState ? (
+                      {showGst && (
+                        <td className="py-3 px-2 text-right font-medium text-slate-800">
+                          {formatCurrency(item.taxableAmount)}
+                        </td>
+                      )}
+                      {showGst && (
+                        <td className="py-3 px-2 text-center text-slate-700 font-semibold">
+                          {item.gstRate}%
+                        </td>
+                      )}
+                      {showGst && (isInterState ? (
                         <td className="py-3 px-2 text-right text-slate-700">
                           {formatCurrency(item.igst)}
                         </td>
@@ -457,7 +471,7 @@ export const InvoiceDetailView: React.FC<InvoiceDetailViewProps> = ({
                             {formatCurrency(item.sgst)}
                           </td>
                         </>
-                      )}
+                      ))}
                       <td className="py-3 pl-2 text-right font-bold text-slate-900">
                         {formatCurrency(item.total)}
                       </td>
@@ -532,26 +546,30 @@ export const InvoiceDetailView: React.FC<InvoiceDetailViewProps> = ({
                   </div>
                 )}
 
-                <div className="flex justify-between py-1 border-b border-slate-100">
-                  <span className="text-slate-600">Taxable Value:</span>
-                  <span className="font-semibold text-slate-800">{formatCurrency(invoice.taxableAmount)}</span>
-                </div>
-
-                {isInterState ? (
-                  <div className="flex justify-between py-1 border-b border-slate-100">
-                    <span className="text-slate-600">IGST:</span>
-                    <span className="font-semibold text-slate-800">{formatCurrency(invoice.igst)}</span>
-                  </div>
-                ) : (
+                {showGst && (invoice.cgst > 0 || invoice.sgst > 0 || invoice.igst > 0) && (
                   <>
                     <div className="flex justify-between py-1 border-b border-slate-100">
-                      <span className="text-slate-600">CGST:</span>
-                      <span className="font-semibold text-slate-800">{formatCurrency(invoice.cgst)}</span>
+                      <span className="text-slate-600">Taxable Value:</span>
+                      <span className="font-semibold text-slate-800">{formatCurrency(invoice.taxableAmount)}</span>
                     </div>
-                    <div className="flex justify-between py-1 border-b border-slate-100">
-                      <span className="text-slate-600">SGST:</span>
-                      <span className="font-semibold text-slate-800">{formatCurrency(invoice.sgst)}</span>
-                    </div>
+
+                    {isInterState ? (
+                      <div className="flex justify-between py-1 border-b border-slate-100">
+                        <span className="text-slate-600">IGST:</span>
+                        <span className="font-semibold text-slate-800">{formatCurrency(invoice.igst)}</span>
+                      </div>
+                    ) : (
+                      <>
+                        <div className="flex justify-between py-1 border-b border-slate-100">
+                          <span className="text-slate-600">CGST:</span>
+                          <span className="font-semibold text-slate-800">{formatCurrency(invoice.cgst)}</span>
+                        </div>
+                        <div className="flex justify-between py-1 border-b border-slate-100">
+                          <span className="text-slate-600">SGST:</span>
+                          <span className="font-semibold text-slate-800">{formatCurrency(invoice.sgst)}</span>
+                        </div>
+                      </>
+                    )}
                   </>
                 )}
 
@@ -578,18 +596,32 @@ export const InvoiceDetailView: React.FC<InvoiceDetailViewProps> = ({
             </div>
 
             {/* Signatory Footer */}
-            <div className="pt-10 flex justify-between items-end text-xs">
-              <div className="text-[11px] text-slate-400">
+            <div className="pt-10 flex flex-col sm:flex-row justify-between items-start sm:items-end gap-6 text-xs border-t border-slate-100">
+              <div className="text-[11px] text-slate-500 space-y-1">
                 <p>This is a computer generated invoice requiring no physical signature.</p>
-                <p>Invoice Temple ERP Engine - Reference #{invoice.id.slice(0, 8)}</p>
+                <p className="text-slate-400">Invoice Temple ERP Engine &bull; Reference #{invoice.id.slice(0, 8)}</p>
+                <div className="pt-2 text-xs text-slate-700 space-y-0.5">
+                  <p><strong>Created By:</strong> {invoice.createdByName || 'Staff'}</p>
+                  <p className="font-bold text-slate-900">
+                    Invoice Prepared By: <span className="text-amber-800 bg-amber-50 px-2 py-0.5 rounded-md font-extrabold">{invoice.createdByName || 'Staff'}</span>
+                  </p>
+                </div>
               </div>
 
-              <div className="text-center w-56">
+              <div className="text-center w-56 ml-auto">
                 <div className="h-14 flex items-end justify-center pb-2">
-                  <span className="text-slate-400 italic text-xs">Digitally Verified</span>
+                  {currentUser?.signatureUrl ? (
+                    <img
+                      src={currentUser.signatureUrl}
+                      alt="Signature"
+                      className="max-h-12 max-w-full object-contain"
+                    />
+                  ) : (
+                    <span className="text-slate-400 italic text-xs">Digitally Verified</span>
+                  )}
                 </div>
                 <div className="border-t border-slate-400 pt-1">
-                  <p className="font-bold text-slate-900">{companySettings.authorizedSignatory}</p>
+                  <p className="font-bold text-slate-900">{companySettings.authorizedPerson || companySettings.authorizedSignatory || invoice.createdByName || 'Authorized Signatory'}</p>
                   <p className="text-[10px] text-slate-500 uppercase">Authorized Signatory</p>
                 </div>
               </div>
@@ -692,11 +724,11 @@ export const InvoiceDetailView: React.FC<InvoiceDetailViewProps> = ({
                   <tr className="bg-slate-900 text-white font-bold uppercase text-[10px]">
                     <th className="py-3 px-3 rounded-l-xl">#</th>
                     <th className="py-3 px-3">Item Description</th>
-                    <th className="py-3 px-3">HSN</th>
+                    {showHsnSac && <th className="py-3 px-3">HSN</th>}
                     <th className="py-3 px-3 text-center">Qty</th>
                     <th className="py-3 px-3 text-right">Rate</th>
-                    <th className="py-3 px-3 text-right">Taxable</th>
-                    <th className="py-3 px-3 text-center">GST %</th>
+                    {showGst && <th className="py-3 px-3 text-right">Taxable</th>}
+                    {showGst && <th className="py-3 px-3 text-center">GST %</th>}
                     <th className="py-3 px-3 text-right rounded-r-xl">Total (₹)</th>
                   </tr>
                 </thead>
@@ -704,12 +736,19 @@ export const InvoiceDetailView: React.FC<InvoiceDetailViewProps> = ({
                   {invoice.items.map((item, idx) => (
                     <tr key={item.id} className="hover:bg-slate-50/60">
                       <td className="py-3 px-3 font-bold text-slate-400">{idx + 1}</td>
-                      <td className="py-3 px-3 font-bold text-slate-900">{item.name}</td>
-                      <td className="py-3 px-3 font-mono text-slate-500">{item.hsnSacCode || '-'}</td>
-                      <td className="py-3 px-3 text-center font-semibold">{item.quantity} {item.unit}</td>
+                      <td className="py-3 px-3 font-bold text-slate-900">
+                        {item.name}
+                        {showDescription && item.description && (
+                          <p className="text-[11px] text-slate-500 font-normal mt-0.5 whitespace-pre-line">
+                            {item.description}
+                          </p>
+                        )}
+                      </td>
+                      {showHsnSac && <td className="py-3 px-3 font-mono text-slate-500">{item.hsnSacCode || '-'}</td>}
+                      <td className="py-3 px-3 text-center font-semibold">{item.quantity} {showUnit ? item.unit : ''}</td>
                       <td className="py-3 px-3 text-right">{formatCurrency(item.rate)}</td>
-                      <td className="py-3 px-3 text-right font-medium">{formatCurrency(item.taxableAmount)}</td>
-                      <td className="py-3 px-3 text-center">{item.gstRate}%</td>
+                      {showGst && <td className="py-3 px-3 text-right font-medium">{formatCurrency(item.taxableAmount)}</td>}
+                      {showGst && <td className="py-3 px-3 text-center">{item.gstRate}%</td>}
                       <td className="py-3 px-3 text-right font-black text-slate-900">
                         {formatCurrency(item.total)}
                       </td>
@@ -734,24 +773,38 @@ export const InvoiceDetailView: React.FC<InvoiceDetailViewProps> = ({
 
               <div className="bg-slate-50 p-6 rounded-2xl border border-slate-100 text-xs space-y-2">
                 <div className="flex justify-between text-slate-600">
-                  <span>Taxable Subtotal:</span>
-                  <span className="font-bold text-slate-900">{formatCurrency(invoice.taxableAmount)}</span>
+                  <span>Subtotal:</span>
+                  <span className="font-bold text-slate-900">{formatCurrency(invoice.subtotal)}</span>
                 </div>
-                {isInterState ? (
-                  <div className="flex justify-between text-slate-600">
-                    <span>IGST:</span>
-                    <span>{formatCurrency(invoice.igst)}</span>
+                {invoice.discount > 0 && (
+                  <div className="flex justify-between text-amber-600 font-semibold">
+                    <span>Discount:</span>
+                    <span>-{formatCurrency(invoice.discount)}</span>
                   </div>
-                ) : (
+                )}
+                {showGst && (invoice.cgst > 0 || invoice.sgst > 0 || invoice.igst > 0) && (
                   <>
                     <div className="flex justify-between text-slate-600">
-                      <span>CGST:</span>
-                      <span>{formatCurrency(invoice.cgst)}</span>
+                      <span>Taxable:</span>
+                      <span className="font-bold text-slate-900">{formatCurrency(invoice.taxableAmount)}</span>
                     </div>
-                    <div className="flex justify-between text-slate-600">
-                      <span>SGST:</span>
-                      <span>{formatCurrency(invoice.sgst)}</span>
-                    </div>
+                    {isInterState ? (
+                      <div className="flex justify-between text-slate-600">
+                        <span>IGST:</span>
+                        <span>{formatCurrency(invoice.igst)}</span>
+                      </div>
+                    ) : (
+                      <>
+                        <div className="flex justify-between text-slate-600">
+                          <span>CGST:</span>
+                          <span>{formatCurrency(invoice.cgst)}</span>
+                        </div>
+                        <div className="flex justify-between text-slate-600">
+                          <span>SGST:</span>
+                          <span>{formatCurrency(invoice.sgst)}</span>
+                        </div>
+                      </>
+                    )}
                   </>
                 )}
                 <div className="flex justify-between text-base font-black text-slate-900 pt-2 border-t border-slate-200">
@@ -761,6 +814,37 @@ export const InvoiceDetailView: React.FC<InvoiceDetailViewProps> = ({
                 <div className="flex justify-between text-xs font-semibold text-slate-700 pt-1">
                   <span>Balance Due:</span>
                   <span className="text-rose-600">{formatCurrency(invoice.balanceAmount)}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Modern Footer with Personalisation */}
+            <div className="pt-8 border-t border-slate-200 flex flex-col sm:flex-row justify-between items-start sm:items-end gap-6 text-xs">
+              <div className="text-[11px] text-slate-500 space-y-1">
+                <p>Computer generated commercial invoice issued under GST provisions.</p>
+                <div className="pt-1 text-xs text-slate-700 space-y-0.5">
+                  <p><strong>Created By:</strong> {invoice.createdByName || 'Staff'}</p>
+                  <p className="font-bold text-slate-900">
+                    Invoice Prepared By: <span className="text-amber-800 bg-amber-50 px-2 py-0.5 rounded-md font-extrabold">{invoice.createdByName || 'Staff'}</span>
+                  </p>
+                </div>
+              </div>
+
+              <div className="text-center w-56 ml-auto">
+                <div className="h-14 flex items-end justify-center pb-2">
+                  {currentUser?.signatureUrl ? (
+                    <img
+                      src={currentUser.signatureUrl}
+                      alt="Signature"
+                      className="max-h-12 max-w-full object-contain"
+                    />
+                  ) : (
+                    <span className="text-slate-400 italic text-xs">Digitally Verified</span>
+                  )}
+                </div>
+                <div className="border-t border-slate-300 pt-1">
+                  <p className="font-bold text-slate-900">{companySettings.authorizedPerson || companySettings.authorizedSignatory || invoice.createdByName || 'Authorized Signatory'}</p>
+                  <p className="text-[10px] text-slate-500 uppercase">Authorized Signatory</p>
                 </div>
               </div>
             </div>
@@ -801,11 +885,11 @@ export const InvoiceDetailView: React.FC<InvoiceDetailViewProps> = ({
                 <tr className="bg-slate-100 border-b border-slate-900 font-bold">
                   <th className="p-1.5 border-r border-slate-900">#</th>
                   <th className="p-1.5 border-r border-slate-900">Description</th>
-                  <th className="p-1.5 border-r border-slate-900">HSN</th>
+                  {showHsnSac && <th className="p-1.5 border-r border-slate-900">HSN</th>}
                   <th className="p-1.5 border-r border-slate-900 text-center">Qty</th>
                   <th className="p-1.5 border-r border-slate-900 text-right">Rate</th>
-                  <th className="p-1.5 border-r border-slate-900 text-right">Taxable</th>
-                  <th className="p-1.5 border-r border-slate-900 text-center">GST %</th>
+                  {showGst && <th className="p-1.5 border-r border-slate-900 text-right">Taxable</th>}
+                  {showGst && <th className="p-1.5 border-r border-slate-900 text-center">GST %</th>}
                   <th className="p-1.5 text-right">Total (₹)</th>
                 </tr>
               </thead>
@@ -813,12 +897,17 @@ export const InvoiceDetailView: React.FC<InvoiceDetailViewProps> = ({
                 {invoice.items.map((item, idx) => (
                   <tr key={item.id} className="border-b border-slate-300">
                     <td className="p-1.5 border-r border-slate-900">{idx + 1}</td>
-                    <td className="p-1.5 border-r border-slate-900 font-medium">{item.name}</td>
-                    <td className="p-1.5 border-r border-slate-900">{item.hsnSacCode}</td>
-                    <td className="p-1.5 border-r border-slate-900 text-center">{item.quantity} {item.unit}</td>
+                    <td className="p-1.5 border-r border-slate-900 font-medium">
+                      {item.name}
+                      {showDescription && item.description && (
+                        <p className="text-[10px] text-slate-500">{item.description}</p>
+                      )}
+                    </td>
+                    {showHsnSac && <td className="p-1.5 border-r border-slate-900">{item.hsnSacCode}</td>}
+                    <td className="p-1.5 border-r border-slate-900 text-center">{item.quantity} {showUnit ? item.unit : ''}</td>
                     <td className="p-1.5 border-r border-slate-900 text-right">{item.rate.toFixed(2)}</td>
-                    <td className="p-1.5 border-r border-slate-900 text-right">{item.taxableAmount.toFixed(2)}</td>
-                    <td className="p-1.5 border-r border-slate-900 text-center">{item.gstRate}%</td>
+                    {showGst && <td className="p-1.5 border-r border-slate-900 text-right">{item.taxableAmount.toFixed(2)}</td>}
+                    {showGst && <td className="p-1.5 border-r border-slate-900 text-center">{item.gstRate}%</td>}
                     <td className="p-1.5 text-right font-bold">{item.total.toFixed(2)}</td>
                   </tr>
                 ))}
@@ -833,18 +922,46 @@ export const InvoiceDetailView: React.FC<InvoiceDetailViewProps> = ({
                 <p className="mt-2 text-[10px] italic">Amount in words: {numberToWordsIndian(invoice.grandTotal)}</p>
               </div>
               <div className="text-right space-y-1">
-                <p>Taxable Total: <strong>{formatCurrency(invoice.taxableAmount)}</strong></p>
-                {isInterState ? (
-                  <p>IGST: <strong>{formatCurrency(invoice.igst)}</strong></p>
-                ) : (
+                <p>Subtotal: <strong>{formatCurrency(invoice.subtotal)}</strong></p>
+                {invoice.discount > 0 && <p className="text-amber-700">Discount: <strong>-{formatCurrency(invoice.discount)}</strong></p>}
+                {showGst && (invoice.cgst > 0 || invoice.sgst > 0 || invoice.igst > 0) && (
                   <>
-                    <p>CGST: <strong>{formatCurrency(invoice.cgst)}</strong></p>
-                    <p>SGST: <strong>{formatCurrency(invoice.sgst)}</strong></p>
+                    <p>Taxable: <strong>{formatCurrency(invoice.taxableAmount)}</strong></p>
+                    {isInterState ? (
+                      <p>IGST: <strong>{formatCurrency(invoice.igst)}</strong></p>
+                    ) : (
+                      <>
+                        <p>CGST: <strong>{formatCurrency(invoice.cgst)}</strong></p>
+                        <p>SGST: <strong>{formatCurrency(invoice.sgst)}</strong></p>
+                      </>
+                    )}
                   </>
                 )}
                 <p className="text-sm font-black border-t border-slate-900 pt-1">
                   Grand Total: {formatCurrency(invoice.grandTotal)}
                 </p>
+              </div>
+            </div>
+
+            {/* Boxed GST Footer with Personalisation */}
+            <div className="border border-slate-900 p-2.5 flex justify-between items-end text-[11px]">
+              <div>
+                <p><strong>Created By:</strong> {invoice.createdByName || 'Staff'}</p>
+                <p className="font-bold text-slate-900 mt-0.5">
+                  Invoice Prepared By: <span className="bg-amber-100 text-amber-950 px-1.5 py-0.2 rounded-sm font-black">{invoice.createdByName || 'Staff'}</span>
+                </p>
+                <p className="text-[10px] text-slate-500 mt-1">Certified that the particulars given above are true and correct.</p>
+              </div>
+              <div className="text-right">
+                <div className="h-10 flex items-end justify-end pb-1">
+                  {currentUser?.signatureUrl ? (
+                    <img src={currentUser.signatureUrl} alt="Signature" className="max-h-8 object-contain" />
+                  ) : (
+                    <span className="text-[10px] italic text-slate-400">Digitally Verified</span>
+                  )}
+                </div>
+                <p className="font-bold border-t border-slate-900 pt-0.5">For {companySettings.companyName}</p>
+                <p className="text-[10px] text-slate-500 uppercase">Authorized Signatory</p>
               </div>
             </div>
           </div>

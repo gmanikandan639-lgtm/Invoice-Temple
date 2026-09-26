@@ -25,6 +25,7 @@ import {
   InvoiceTemplate,
   INDIAN_STATES,
   PaymentMode,
+  getUserDisplayName,
 } from '../../types';
 import {
   calculateItemTaxes,
@@ -72,7 +73,7 @@ export const InvoiceCreateView: React.FC<InvoiceCreateViewProps> = ({
   // Basic Details
   const [invoiceNumber, setInvoiceNumber] = useState('');
   const [invoiceDate, setInvoiceDate] = useState(() => new Date().toISOString().split('T')[0]);
-  const [paymentTerms, setPaymentTerms] = useState(invoiceSettings.defaultPaymentTerms || 'Net 30');
+  const [paymentTerms, setPaymentTerms] = useState(invoiceSettings.defaultPaymentTerms || 'Due on Receipt');
   const [dueDate, setDueDate] = useState(() => {
     const d = new Date();
     d.setDate(d.getDate() + 30);
@@ -93,14 +94,14 @@ export const InvoiceCreateView: React.FC<InvoiceCreateViewProps> = ({
   // Quick Add Customer modal
   const [quickCustomerModalOpen, setQuickCustomerModalOpen] = useState(false);
   const [newCustName, setNewCustName] = useState('');
-  const [newCustCompany, setNewCustCompany] = useState('');
   const [newCustMobile, setNewCustMobile] = useState('');
-  const [newCustEmail, setNewCustEmail] = useState('');
-  const [newCustGstin, setNewCustGstin] = useState('');
   const [newCustAddress, setNewCustAddress] = useState('');
   const [newCustCity, setNewCustCity] = useState('');
   const [newCustState, setNewCustState] = useState(companySettings.state || 'Tamil Nadu');
   const [newCustPincode, setNewCustPincode] = useState('');
+
+  // Discount Amount for Financial Summary
+  const [invoiceDiscount, setInvoiceDiscount] = useState<number>(0);
 
   // Items State
   const [items, setItems] = useState<InvoiceItem[]>([
@@ -110,12 +111,12 @@ export const InvoiceCreateView: React.FC<InvoiceCreateViewProps> = ({
       description: '',
       hsnSacCode: '',
       quantity: 1,
-      unit: 'NOS',
+      unit: '',
       rate: 0,
       discount: 0,
       discountType: 'fixed',
       taxableAmount: 0,
-      gstRate: 18,
+      gstRate: 0,
       cgst: 0,
       sgst: 0,
       igst: 0,
@@ -142,12 +143,13 @@ export const InvoiceCreateView: React.FC<InvoiceCreateViewProps> = ({
       setInvoiceNumber(existingInvoice.invoiceNumber);
       setInvoiceDate(existingInvoice.invoiceDate);
       setDueDate(existingInvoice.dueDate);
-      setPaymentTerms(existingInvoice.paymentTerms || 'Net 30');
+      setPaymentTerms(existingInvoice.paymentTerms || 'Due on Receipt');
       setPoNumber(existingInvoice.poNumber || '');
       setReferenceNumber(existingInvoice.referenceNumber || '');
       setPlaceOfSupply(existingInvoice.placeOfSupply || companySettings.state || 'Tamil Nadu');
       setSalesperson(existingInvoice.salesperson || currentUser?.name || 'Admin');
       setTemplate(existingInvoice.template || 'classic');
+      setInvoiceDiscount(existingInvoice.discount || 0);
       if (existingInvoice.customerId && existingInvoice.customerId !== 'draft_pending') {
         setSelectedCustomerId(existingInvoice.customerId);
       }
@@ -182,56 +184,28 @@ export const InvoiceCreateView: React.FC<InvoiceCreateViewProps> = ({
     return (companySettings.state || '').trim().toLowerCase() !== (placeOfSupply || '').trim().toLowerCase();
   }, [companySettings.state, placeOfSupply]);
 
-  // Recalculate item when quantities, rates, discount, or tax regime changes
+  // Recalculate item when quantities or rates change
   const updateItemRow = (index: number, updates: Partial<InvoiceItem>) => {
     setItems((prev) => {
       const copy = [...prev];
       const current = { ...copy[index], ...updates };
-
-      const calc = calculateItemTaxes(
-        current.quantity,
-        current.rate,
-        current.discount,
-        current.discountType,
-        current.gstRate,
-        isInterState
-      );
+      const qty = Number(current.quantity) || 0;
+      const rate = Number(current.rate) || 0;
+      const total = Math.round(qty * rate * 100) / 100;
 
       copy[index] = {
         ...current,
-        taxableAmount: calc.taxableAmount,
-        cgst: calc.cgst,
-        sgst: calc.sgst,
-        igst: calc.igst,
-        total: calc.total,
+        taxableAmount: total,
+        cgst: 0,
+        sgst: 0,
+        igst: 0,
+        gstRate: 0,
+        discount: 0,
+        total,
       };
       return copy;
     });
   };
-
-  // Recalculate all items if place of supply changes
-  useEffect(() => {
-    setItems((prev) =>
-      prev.map((item) => {
-        const calc = calculateItemTaxes(
-          item.quantity,
-          item.rate,
-          item.discount,
-          item.discountType,
-          item.gstRate,
-          isInterState
-        );
-        return {
-          ...item,
-          taxableAmount: calc.taxableAmount,
-          cgst: calc.cgst,
-          sgst: calc.sgst,
-          igst: calc.igst,
-          total: calc.total,
-        };
-      })
-    );
-  }, [isInterState]);
 
   // Add Item row
   const addItem = () => {
@@ -243,12 +217,12 @@ export const InvoiceCreateView: React.FC<InvoiceCreateViewProps> = ({
         description: '',
         hsnSacCode: '',
         quantity: 1,
-        unit: 'NOS',
+        unit: '',
         rate: 0,
         discount: 0,
         discountType: 'fixed',
         taxableAmount: 0,
-        gstRate: 18,
+        gstRate: 0,
         cgst: 0,
         sgst: 0,
         igst: 0,
@@ -279,31 +253,36 @@ export const InvoiceCreateView: React.FC<InvoiceCreateViewProps> = ({
     setItems((prev) => prev.filter((_, i) => i !== index));
   };
 
-  // Select pre-configured Product from dropdown
-  const handleProductSelect = (index: number, productId: string) => {
-    const prod = products.find((p) => p.id === productId);
-    if (!prod) return;
-
-    updateItemRow(index, {
-      productId: prod.id,
-      name: prod.name,
-      description: prod.description || '',
-      hsnSacCode: prod.hsnSacCode || '',
-      unit: prod.unit || 'NOS',
-      rate: prod.price,
-      gstRate: prod.gstRate,
-    });
-  };
-
-  // Totals Calculation
+  // Totals Calculation with overall Discount Amount
   const totals = useMemo(() => {
-    return calculateInvoiceTotals(items);
-  }, [items]);
+    let subtotal = 0;
+    items.forEach((it) => {
+      const q = Number(it.quantity) || 0;
+      const r = Number(it.rate) || 0;
+      subtotal += Math.round(q * r * 100) / 100;
+    });
+    subtotal = Math.round(subtotal * 100) / 100;
+    const discount = Math.min(subtotal, Math.max(0, Number(invoiceDiscount) || 0));
+    const afterDiscount = Math.max(0, Math.round((subtotal - discount) * 100) / 100);
+    const roundOff = Math.round((Math.round(afterDiscount) - afterDiscount) * 100) / 100;
+    const grandTotal = Math.round(afterDiscount);
+
+    return {
+      subtotal,
+      discount,
+      taxableAmount: afterDiscount,
+      cgst: 0,
+      sgst: 0,
+      igst: 0,
+      roundOff,
+      grandTotal,
+    };
+  }, [items, invoiceDiscount]);
 
   // Quick Customer Creation
   const handleQuickCustomerSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newCustName || !newCustAddress || !newCustState) {
+    if (!newCustName.trim() || !newCustAddress.trim() || !newCustState.trim()) {
       showToast('Name, address and state are required', 'error');
       return;
     }
@@ -313,16 +292,16 @@ export const InvoiceCreateView: React.FC<InvoiceCreateViewProps> = ({
       const stateCode = getStateCodeByName(newCustState);
       const created = await addCustomer({
         customerId: custCode,
-        customerName: newCustName,
-        companyName: newCustCompany || newCustName,
-        mobileNumber: newCustMobile,
-        email: newCustEmail,
-        gstin: newCustGstin,
-        billingAddress: newCustAddress,
-        shippingAddress: newCustAddress,
-        city: newCustCity,
+        customerName: newCustName.trim(),
+        companyName: '',
+        mobileNumber: newCustMobile.trim(),
+        email: '',
+        gstin: '',
+        billingAddress: newCustAddress.trim(),
+        shippingAddress: newCustAddress.trim(),
+        city: newCustCity.trim(),
         state: newCustState,
-        pincode: newCustPincode,
+        pincode: newCustPincode.trim(),
         stateCode,
         createdBy: currentUser?.uid || 'user',
       });
@@ -333,10 +312,7 @@ export const InvoiceCreateView: React.FC<InvoiceCreateViewProps> = ({
 
       // Reset form
       setNewCustName('');
-      setNewCustCompany('');
       setNewCustMobile('');
-      setNewCustEmail('');
-      setNewCustGstin('');
       setNewCustAddress('');
       setNewCustCity('');
       setNewCustPincode('');
@@ -416,7 +392,7 @@ export const InvoiceCreateView: React.FC<InvoiceCreateViewProps> = ({
         notes,
         terms,
         createdBy: currentUser?.uid || 'user',
-        createdByName: currentUser?.name || 'Staff',
+        createdByName: getUserDisplayName(currentUser),
       };
 
       if (editInvoiceId) {
@@ -502,7 +478,7 @@ export const InvoiceCreateView: React.FC<InvoiceCreateViewProps> = ({
             referenceNumber: initialPaymentRef,
             notes: 'Initial settlement on invoice finalization',
             createdBy: currentUser?.uid || 'user',
-            createdByName: currentUser?.name || 'Staff',
+            createdByName: getUserDisplayName(currentUser),
           });
         }
 
@@ -537,7 +513,7 @@ export const InvoiceCreateView: React.FC<InvoiceCreateViewProps> = ({
           notes,
           terms,
           createdBy: currentUser?.uid || 'user',
-          createdByName: currentUser?.name || 'Staff',
+          createdByName: getUserDisplayName(currentUser),
         });
 
         // If initial payment was recorded
@@ -554,7 +530,7 @@ export const InvoiceCreateView: React.FC<InvoiceCreateViewProps> = ({
             referenceNumber: initialPaymentRef,
             notes: 'Initial settlement on invoice creation',
             createdBy: currentUser?.uid || 'user',
-            createdByName: currentUser?.name || 'Staff',
+            createdByName: getUserDisplayName(currentUser),
           });
         }
 
@@ -651,17 +627,13 @@ export const InvoiceCreateView: React.FC<InvoiceCreateViewProps> = ({
             <p className="text-xs text-slate-500 whitespace-pre-line leading-relaxed">
               {companySettings.address}, {companySettings.city}, {companySettings.state} - {companySettings.pincode}
             </p>
-            <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-600 pt-1">
-              <span>
-                <strong className="font-semibold text-slate-700">GSTIN:</strong> {companySettings.gstin}
-              </span>
-              <span>
-                <strong className="font-semibold text-slate-700">PAN:</strong> {companySettings.pan || 'N/A'}
-              </span>
-              <span>
-                <strong className="font-semibold text-slate-700">Phone:</strong> {companySettings.phone}
-              </span>
-            </div>
+            {companySettings.phone && (
+              <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-600 pt-1">
+                <span>
+                  <strong className="font-semibold text-slate-700">Phone:</strong> {companySettings.phone}
+                </span>
+              </div>
+            )}
           </div>
 
           {/* Right: Invoice Metadata */}
@@ -694,28 +666,6 @@ export const InvoiceCreateView: React.FC<InvoiceCreateViewProps> = ({
 
             <div>
               <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1">
-                Payment Terms
-              </label>
-              <select
-                value={paymentTerms}
-                onChange={(e) => {
-                  setPaymentTerms(e.target.value);
-                  const days = e.target.value === 'Net 15' ? 15 : e.target.value === 'Net 30' ? 30 : e.target.value === 'Net 60' ? 60 : 0;
-                  const d = new Date(invoiceDate);
-                  d.setDate(d.getDate() + days);
-                  setDueDate(d.toISOString().split('T')[0]);
-                }}
-                className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs text-slate-900 focus:ring-2 focus:ring-amber-500"
-              >
-                <option value="Due on Receipt">Due on Receipt</option>
-                <option value="Net 15">Net 15 Days</option>
-                <option value="Net 30">Net 30 Days</option>
-                <option value="Net 60">Net 60 Days</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1">
                 Due Date
               </label>
               <input
@@ -723,19 +673,6 @@ export const InvoiceCreateView: React.FC<InvoiceCreateViewProps> = ({
                 value={dueDate}
                 onChange={(e) => setDueDate(e.target.value)}
                 required
-                className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs text-slate-900 focus:ring-2 focus:ring-amber-500"
-              />
-            </div>
-
-            <div>
-              <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1">
-                PO Number (Optional)
-              </label>
-              <input
-                type="text"
-                value={poNumber}
-                onChange={(e) => setPoNumber(e.target.value)}
-                placeholder="e.g. PO-8921"
                 className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs text-slate-900 focus:ring-2 focus:ring-amber-500"
               />
             </div>
@@ -755,6 +692,19 @@ export const InvoiceCreateView: React.FC<InvoiceCreateViewProps> = ({
                   </option>
                 ))}
               </select>
+            </div>
+
+            <div className="sm:col-span-2">
+              <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1">
+                PO Number (Optional)
+              </label>
+              <input
+                type="text"
+                value={poNumber}
+                onChange={(e) => setPoNumber(e.target.value)}
+                placeholder="e.g. PO-8921"
+                className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs text-slate-900 focus:ring-2 focus:ring-amber-500"
+              />
             </div>
           </div>
         </div>
@@ -798,42 +748,30 @@ export const InvoiceCreateView: React.FC<InvoiceCreateViewProps> = ({
 
           {/* Customer Details Preview Card */}
           {selectedCustomer && (
-            <div className="p-4 bg-slate-50/80 rounded-xl border border-slate-200/60 grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
+            <div className="p-4 bg-slate-50/80 rounded-xl border border-slate-200/60 grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
               <div>
-                <span className="font-bold text-slate-800 block">{selectedCustomer.customerName}</span>
-                <span className="text-slate-500 block">{selectedCustomer.companyName}</span>
+                <span className="font-bold text-slate-800 block text-sm">{selectedCustomer.customerName}</span>
+                {selectedCustomer.companyName && (
+                  <span className="text-slate-500 block">{selectedCustomer.companyName}</span>
+                )}
                 <span className="text-slate-500 block mt-1">{selectedCustomer.billingAddress}</span>
                 <span className="text-slate-500 block">
-                  {selectedCustomer.city}, {selectedCustomer.state} - {selectedCustomer.pincode}
+                  {selectedCustomer.city ? `${selectedCustomer.city}, ` : ''}{selectedCustomer.state} {selectedCustomer.pincode ? `- ${selectedCustomer.pincode}` : ''}
                 </span>
               </div>
-              <div>
-                <span className="text-slate-400 block uppercase text-[10px] font-bold">Tax Identifiers</span>
-                <p className="mt-1 text-slate-700">
-                  <strong className="font-semibold">GSTIN:</strong> {selectedCustomer.gstin || 'Unregistered'}
-                </p>
+              <div className="space-y-1">
+                {selectedCustomer.mobileNumber && (
+                  <p className="text-slate-700">
+                    <strong className="font-semibold text-slate-800">Mobile:</strong> {selectedCustomer.mobileNumber}
+                  </p>
+                )}
+                {selectedCustomer.email && (
+                  <p className="text-slate-700">
+                    <strong className="font-semibold text-slate-800">Email:</strong> {selectedCustomer.email}
+                  </p>
+                )}
                 <p className="text-slate-700">
-                  <strong className="font-semibold">PAN:</strong> {selectedCustomer.pan || 'N/A'}
-                </p>
-                <p className="text-slate-700">
-                  <strong className="font-semibold">State Code:</strong> {selectedCustomer.stateCode || '-'}
-                </p>
-              </div>
-              <div>
-                <span className="text-slate-400 block uppercase text-[10px] font-bold">GST Classification</span>
-                <div className="mt-1">
-                  {isInterState ? (
-                    <span className="inline-flex items-center gap-1 text-sky-700 bg-sky-50 border border-sky-200 px-2 py-0.5 rounded-md font-semibold text-[11px]">
-                      Inter-State (IGST Applicable)
-                    </span>
-                  ) : (
-                    <span className="inline-flex items-center gap-1 text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-md font-semibold text-[11px]">
-                      Intra-State (CGST + SGST Applicable)
-                    </span>
-                  )}
-                </div>
-                <p className="text-[11px] text-slate-400 mt-1">
-                  Company State: {companySettings.state} → Place of Supply: {placeOfSupply}
+                  <strong className="font-semibold text-slate-800">Place of Supply:</strong> {placeOfSupply}
                 </p>
               </div>
             </div>
@@ -844,8 +782,8 @@ export const InvoiceCreateView: React.FC<InvoiceCreateViewProps> = ({
         <div className="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-xs space-y-4">
           <div className="flex items-center justify-between border-b border-slate-100 pb-3">
             <div>
-              <h3 className="text-sm font-bold text-slate-900">Line Items &amp; GST Calculations</h3>
-              <p className="text-xs text-slate-400">Add products, customize description, discount and tax rates</p>
+              <h3 className="text-sm font-bold text-slate-900">Line Items &amp; Pricing</h3>
+              <p className="text-xs text-slate-400">Enter item details, quantity, and rate (manual typing)</p>
             </div>
             <button
               type="button"
@@ -861,16 +799,11 @@ export const InvoiceCreateView: React.FC<InvoiceCreateViewProps> = ({
             <table className="w-full text-left text-xs">
               <thead className="bg-slate-50 text-slate-600 font-bold border-b border-slate-200 uppercase tracking-wider text-[10px]">
                 <tr>
-                  <th className="px-3 py-2.5 w-8">#</th>
-                  <th className="px-3 py-2.5 min-w-[200px]">Item / Product</th>
-                  <th className="px-3 py-2.5 w-24">HSN/SAC</th>
-                  <th className="px-3 py-2.5 w-20">Qty</th>
-                  <th className="px-3 py-2.5 w-20">Unit</th>
-                  <th className="px-3 py-2.5 w-24">Rate (₹)</th>
-                  <th className="px-3 py-2.5 w-24">Disc (₹)</th>
-                  <th className="px-3 py-2.5 w-28">Taxable</th>
-                  <th className="px-3 py-2.5 w-24">GST %</th>
-                  <th className="px-3 py-2.5 w-28 text-right">Total (₹)</th>
+                  <th className="px-3 py-2.5 w-10">#</th>
+                  <th className="px-3 py-2.5 min-w-[260px]">Item / Product Detail</th>
+                  <th className="px-3 py-2.5 w-24">Qty</th>
+                  <th className="px-3 py-2.5 w-32">Rate (₹)</th>
+                  <th className="px-3 py-2.5 w-32 text-right">Total (₹)</th>
                   <th className="px-3 py-2.5 w-16 text-center">Action</th>
                 </tr>
               </thead>
@@ -879,44 +812,21 @@ export const InvoiceCreateView: React.FC<InvoiceCreateViewProps> = ({
                   <tr key={item.id} className="align-top hover:bg-slate-50/50">
                     <td className="px-3 py-2.5 text-slate-400 font-bold">{idx + 1}</td>
                     <td className="px-3 py-2.5 space-y-1.5">
-                      {/* Catalog Selector */}
-                      <select
-                        onChange={(e) => handleProductSelect(idx, e.target.value)}
-                        className="w-full text-[11px] p-1.5 border border-slate-200 rounded-lg text-slate-600 bg-slate-50/50"
-                      >
-                        <option value="">-- Load from Products --</option>
-                        {products.map((p) => (
-                          <option key={p.id} value={p.id}>
-                            {p.name} (₹{p.price})
-                          </option>
-                        ))}
-                      </select>
-
                       <input
                         type="text"
                         value={item.name}
                         onChange={(e) => updateItemRow(idx, { name: e.target.value })}
                         required
-                        placeholder="Item / Service Name *"
-                        className="w-full px-2 py-1.5 border border-slate-200 rounded-lg text-xs font-semibold focus:ring-1 focus:ring-amber-500"
+                        placeholder="Item / Product Name *"
+                        className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg text-xs font-semibold focus:ring-1 focus:ring-amber-500"
                       />
 
                       <textarea
                         rows={1}
                         value={item.description || ''}
                         onChange={(e) => updateItemRow(idx, { description: e.target.value })}
-                        placeholder="Optional description"
-                        className="w-full px-2 py-1 border border-slate-200 rounded-lg text-[11px] text-slate-600 focus:ring-1 focus:ring-amber-500"
-                      />
-                    </td>
-
-                    <td className="px-3 py-2.5">
-                      <input
-                        type="text"
-                        value={item.hsnSacCode || ''}
-                        onChange={(e) => updateItemRow(idx, { hsnSacCode: e.target.value })}
-                        placeholder="998313"
-                        className="w-full px-2 py-1.5 border border-slate-200 rounded-lg text-xs"
+                        placeholder="Optional description / details"
+                        className="w-full px-2.5 py-1 border border-slate-200 rounded-lg text-[11px] text-slate-600 focus:ring-1 focus:ring-amber-500"
                       />
                     </td>
 
@@ -928,16 +838,7 @@ export const InvoiceCreateView: React.FC<InvoiceCreateViewProps> = ({
                         value={item.quantity}
                         onChange={(e) => updateItemRow(idx, { quantity: parseFloat(e.target.value) || 0 })}
                         required
-                        className="w-full px-2 py-1.5 border border-slate-200 rounded-lg text-xs font-bold"
-                      />
-                    </td>
-
-                    <td className="px-3 py-2.5">
-                      <input
-                        type="text"
-                        value={item.unit}
-                        onChange={(e) => updateItemRow(idx, { unit: e.target.value })}
-                        className="w-full px-2 py-1.5 border border-slate-200 rounded-lg text-xs uppercase"
+                        className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg text-xs font-bold"
                       />
                     </td>
 
@@ -949,40 +850,11 @@ export const InvoiceCreateView: React.FC<InvoiceCreateViewProps> = ({
                         value={item.rate}
                         onChange={(e) => updateItemRow(idx, { rate: parseFloat(e.target.value) || 0 })}
                         required
-                        className="w-full px-2 py-1.5 border border-slate-200 rounded-lg text-xs font-bold"
+                        className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg text-xs font-bold"
                       />
                     </td>
 
-                    <td className="px-3 py-2.5">
-                      <input
-                        type="number"
-                        min="0"
-                        step="0.01"
-                        value={item.discount}
-                        onChange={(e) => updateItemRow(idx, { discount: parseFloat(e.target.value) || 0 })}
-                        className="w-full px-2 py-1.5 border border-slate-200 rounded-lg text-xs"
-                      />
-                    </td>
-
-                    <td className="px-3 py-2.5 font-semibold text-slate-700">
-                      {formatCurrency(item.taxableAmount)}
-                    </td>
-
-                    <td className="px-3 py-2.5">
-                      <select
-                        value={item.gstRate}
-                        onChange={(e) => updateItemRow(idx, { gstRate: parseFloat(e.target.value) || 0 })}
-                        className="w-full px-1.5 py-1.5 border border-slate-200 rounded-lg text-xs font-semibold bg-white"
-                      >
-                        <option value="0">0%</option>
-                        <option value="5">5%</option>
-                        <option value="12">12%</option>
-                        <option value="18">18%</option>
-                        <option value="28">28%</option>
-                      </select>
-                    </td>
-
-                    <td className="px-3 py-2.5 text-right font-black text-slate-900">
+                    <td className="px-3 py-2.5 text-right font-black text-slate-900 text-sm">
                       {formatCurrency(item.total)}
                     </td>
 
@@ -1119,40 +991,33 @@ export const InvoiceCreateView: React.FC<InvoiceCreateViewProps> = ({
                 Invoice Financial Summary
               </h4>
 
-              <div className="space-y-2 text-xs divide-y divide-slate-800/80">
-                <div className="flex justify-between text-slate-300 pt-1">
+              <div className="space-y-3 text-xs divide-y divide-slate-800/80">
+                <div className="flex justify-between items-center text-slate-300 pt-1">
                   <span>Gross Subtotal:</span>
-                  <span className="font-semibold">{formatCurrency(totals.subtotal)}</span>
+                  <span className="font-semibold text-white">{formatCurrency(totals.subtotal)}</span>
+                </div>
+
+                {/* Editable Discount Amount */}
+                <div className="pt-2 flex justify-between items-center gap-2">
+                  <span className="text-amber-400 font-semibold">Discount Amount (₹):</span>
+                  <div className="w-32">
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={invoiceDiscount === 0 ? '' : invoiceDiscount}
+                      onChange={(e) => setInvoiceDiscount(parseFloat(e.target.value) || 0)}
+                      placeholder="0.00"
+                      className="w-full px-2.5 py-1.5 bg-slate-800 border border-slate-700 rounded-lg text-xs font-bold text-amber-300 text-right focus:ring-2 focus:ring-amber-500 focus:outline-none"
+                    />
+                  </div>
                 </div>
 
                 {totals.discount > 0 && (
-                  <div className="flex justify-between text-amber-400 pt-2">
-                    <span>Total Discount:</span>
+                  <div className="flex justify-between text-amber-400 pt-2 font-medium">
+                    <span>Discount Applied:</span>
                     <span className="font-semibold">-{formatCurrency(totals.discount)}</span>
                   </div>
-                )}
-
-                <div className="flex justify-between text-slate-300 pt-2 font-medium">
-                  <span>Taxable Amount:</span>
-                  <span>{formatCurrency(totals.taxableAmount)}</span>
-                </div>
-
-                {isInterState ? (
-                  <div className="flex justify-between text-sky-400 pt-2">
-                    <span>IGST (Integrated Tax):</span>
-                    <span className="font-semibold">{formatCurrency(totals.igst)}</span>
-                  </div>
-                ) : (
-                  <>
-                    <div className="flex justify-between text-sky-400 pt-2">
-                      <span>CGST (Central Tax):</span>
-                      <span className="font-semibold">{formatCurrency(totals.cgst)}</span>
-                    </div>
-                    <div className="flex justify-between text-sky-400 pt-2">
-                      <span>SGST (State Tax):</span>
-                      <span className="font-semibold">{formatCurrency(totals.sgst)}</span>
-                    </div>
-                  </>
                 )}
 
                 <div className="flex justify-between text-slate-400 pt-2">
@@ -1160,9 +1025,9 @@ export const InvoiceCreateView: React.FC<InvoiceCreateViewProps> = ({
                   <span>{formatCurrency(totals.roundOff)}</span>
                 </div>
 
-                <div className="flex justify-between text-base font-black text-white pt-3">
+                <div className="flex justify-between text-base font-black text-white pt-3 items-center">
                   <span>Grand Total:</span>
-                  <span className="text-amber-400 text-lg">{formatCurrency(totals.grandTotal)}</span>
+                  <span className="text-amber-400 text-xl font-black">{formatCurrency(totals.grandTotal)}</span>
                 </div>
 
                 {recordInitialPayment && initialPaymentAmount > 0 && (
@@ -1228,30 +1093,8 @@ export const InvoiceCreateView: React.FC<InvoiceCreateViewProps> = ({
                 value={newCustName}
                 onChange={(e) => setNewCustName(e.target.value)}
                 required
-                placeholder="Contact Person or Client Name"
-                className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">Company Name</label>
-              <input
-                type="text"
-                value={newCustCompany}
-                onChange={(e) => setNewCustCompany(e.target.value)}
-                placeholder="Enterprise Legal Name"
-                className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">GSTIN</label>
-              <input
-                type="text"
-                value={newCustGstin}
-                onChange={(e) => setNewCustGstin(e.target.value.toUpperCase())}
-                placeholder="33AAAAA0000A1Z5"
-                className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs uppercase"
+                placeholder="Client Name"
+                className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-amber-500"
               />
             </div>
 
@@ -1262,28 +1105,17 @@ export const InvoiceCreateView: React.FC<InvoiceCreateViewProps> = ({
                 value={newCustMobile}
                 onChange={(e) => setNewCustMobile(e.target.value)}
                 placeholder="+91 98765 43210"
-                className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs"
+                className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-amber-500"
               />
             </div>
 
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">Email</label>
-              <input
-                type="email"
-                value={newCustEmail}
-                onChange={(e) => setNewCustEmail(e.target.value)}
-                placeholder="billing@company.com"
-                className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs"
-              />
-            </div>
-
-            <div>
+            <div className="sm:col-span-2">
               <label className="block text-xs font-semibold text-slate-700 mb-1">State *</label>
               <select
                 value={newCustState}
                 onChange={(e) => setNewCustState(e.target.value)}
                 required
-                className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs bg-white"
+                className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs bg-white focus:ring-2 focus:ring-amber-500"
               >
                 {INDIAN_STATES.map((s) => (
                   <option key={s.code} value={s.name}>

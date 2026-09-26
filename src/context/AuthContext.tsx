@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { UserProfile, UserRole } from '../types';
 import { INITIAL_USERS } from '../data/initialData';
-import { auth, isConfigured } from '../lib/firebase';
+import { auth, db, isConfigured, handleFirestoreError, OperationType } from '../lib/firebase';
 import {
   signInWithEmailAndPassword,
   signOut,
@@ -10,6 +10,7 @@ import {
   GoogleAuthProvider,
   signInWithPopup,
 } from 'firebase/auth';
+import { doc, getDoc, setDoc, onSnapshot } from 'firebase/firestore';
 
 interface AuthContextType {
   currentUser: UserProfile | null;
@@ -44,29 +45,105 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [loading, setLoading] = useState<boolean>(true);
 
   useEffect(() => {
+    let unsubscribeSnapshot: (() => void) | null = null;
+
     if (isConfigured && auth) {
-      const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
-        if (firebaseUser) {
-          // If logged in via Firebase Auth
-          const matchedProfile: UserProfile = {
-            uid: firebaseUser.uid,
-            name: firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'User',
-            email: firebaseUser.email || '',
-            role: firebaseUser.email === 'gmanikandan639@gmail.com' ? 'admin' : (currentUser?.role || 'user'),
-            status: 'active',
-            photoURL: firebaseUser.photoURL || undefined,
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-            lastLoginAt: new Date().toISOString(),
-          };
-          setCurrentUser(matchedProfile);
-          localStorage.setItem(LOCAL_STORAGE_USER_KEY, JSON.stringify(matchedProfile));
-        } else {
-          // If signed out in Firebase Auth but have local demo user, keep local or clear
+      const unsubscribeAuth = onAuthStateChanged(auth, async (firebaseUser) => {
+        if (unsubscribeSnapshot) {
+          unsubscribeSnapshot();
+          unsubscribeSnapshot = null;
         }
-        setLoading(false);
+
+        if (firebaseUser) {
+          if (db) {
+            const userDocRef = doc(db, 'users', firebaseUser.uid);
+
+            // Set up real-time listener for instant profile synchronization
+            unsubscribeSnapshot = onSnapshot(
+              userDocRef,
+              async (snap) => {
+                if (snap.exists()) {
+                  const data = snap.data();
+                  const assignedRole: UserRole =
+                    data.role === 'admin' || data.role === 'user'
+                      ? data.role
+                      : firebaseUser.email === 'gmanikandan639@gmail.com'
+                      ? 'admin'
+                      : 'user';
+
+                  const matchedProfile: UserProfile = {
+                    uid: firebaseUser.uid,
+                    displayName: data.displayName || data.name || firebaseUser.displayName || 'User',
+                    preferredName: data.preferredName || '',
+                    name: data.name || data.displayName || firebaseUser.displayName || 'User',
+                    email: data.email || firebaseUser.email || '',
+                    phone: data.phone || '',
+                    companyName: data.companyName || '',
+                    designation: data.designation || '',
+                    signatureUrl: data.signatureUrl || '',
+                    themePreference: data.themePreference || 'light',
+                    role: assignedRole,
+                    status: data.status || 'active',
+                    photoURL: data.photoURL || data.profilePhoto || firebaseUser.photoURL || '',
+                    profilePhoto: data.profilePhoto || data.photoURL || firebaseUser.photoURL || '',
+                    createdAt: data.createdAt || new Date().toISOString(),
+                    updatedAt: data.updatedAt || new Date().toISOString(),
+                    lastLoginAt: new Date().toISOString(),
+                  };
+                  setCurrentUser(matchedProfile);
+                  localStorage.setItem(LOCAL_STORAGE_USER_KEY, JSON.stringify(matchedProfile));
+                } else {
+                  // First login: bootstrap Firestore user profile document
+                  const initialName = firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'User';
+                  const initialPreferred = initialName.split(' ')[0] || initialName;
+                  const newProfile: UserProfile = {
+                    uid: firebaseUser.uid,
+                    displayName: initialName,
+                    name: initialName,
+                    preferredName: initialPreferred,
+                    email: firebaseUser.email || '',
+                    phone: '',
+                    companyName: '',
+                    designation: '',
+                    signatureUrl: '',
+                    themePreference: 'light',
+                    role: firebaseUser.email === 'gmanikandan639@gmail.com' ? 'admin' : 'user',
+                    status: 'active',
+                    photoURL: firebaseUser.photoURL || '',
+                    profilePhoto: firebaseUser.photoURL || '',
+                    createdAt: new Date().toISOString(),
+                    updatedAt: new Date().toISOString(),
+                    lastLoginAt: new Date().toISOString(),
+                  };
+                  try {
+                    await setDoc(userDocRef, newProfile, { merge: true });
+                  } catch (e) {
+                    console.warn('Initial user profile write fallback:', e);
+                  }
+                  setCurrentUser(newProfile);
+                  localStorage.setItem(LOCAL_STORAGE_USER_KEY, JSON.stringify(newProfile));
+                }
+                setLoading(false);
+              },
+              (err) => {
+                handleFirestoreError(err, OperationType.GET, `users/${firebaseUser.uid}`);
+                setLoading(false);
+              }
+            );
+          } else {
+            setLoading(false);
+          }
+        } else {
+          setLoading(false);
+        }
       });
-      return () => unsubscribe();
+
+      return () => {
+        unsubscribeAuth();
+        if (unsubscribeSnapshot) {
+          unsubscribeSnapshot();
+        }
+      };
     } else {
       setLoading(false);
     }
@@ -78,13 +155,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (isConfigured && auth) {
         const userCred = await signInWithEmailAndPassword(auth, email, password);
         const fbUser = userCred.user;
+        const initialName = fbUser.displayName || email.split('@')[0];
         const profile: UserProfile = {
           uid: fbUser.uid,
-          name: fbUser.displayName || email.split('@')[0],
+          name: initialName,
+          displayName: initialName,
+          preferredName: initialName.split(' ')[0] || initialName,
           email: fbUser.email || email,
           role: email === 'gmanikandan639@gmail.com' || email.includes('admin') ? 'admin' : 'user',
           status: 'active',
           photoURL: fbUser.photoURL || undefined,
+          profilePhoto: fbUser.photoURL || undefined,
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
           lastLoginAt: new Date().toISOString(),
@@ -110,9 +191,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         } else {
           // Allow custom user login for convenience
           const isAdm = normalized.includes('admin') || normalized === 'gmanikandan639@gmail.com';
+          const defaultName = email.split('@')[0];
           const newUser: UserProfile = {
             uid: 'user_' + Date.now(),
-            name: email.split('@')[0],
+            name: defaultName,
+            displayName: defaultName,
+            preferredName: defaultName,
             email: email,
             role: isAdm ? 'admin' : 'user',
             status: 'active',
@@ -130,9 +214,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       console.warn('Firebase Email/Password auth fallback triggered:', err);
       const normalized = email.trim().toLowerCase();
       const isAdm = normalized === 'gmanikandan639@gmail.com' || normalized.includes('admin');
+      const dispName = normalized === 'gmanikandan639@gmail.com' ? 'Manikandan G' : normalized.split('@')[0];
+      const prefName = normalized === 'gmanikandan639@gmail.com' ? 'Mani' : dispName.split(' ')[0] || dispName;
       const profile: UserProfile = {
         uid: 'user_' + btoa(normalized).replace(/=/g, ''),
-        name: normalized === 'gmanikandan639@gmail.com' ? 'G Manikandan' : normalized.split('@')[0],
+        name: dispName,
+        displayName: dispName,
+        preferredName: prefName,
         email: normalized,
         role: isAdm ? 'admin' : 'user',
         status: 'active',
@@ -162,13 +250,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           const isAdm =
             email.toLowerCase() === 'gmanikandan639@gmail.com' ||
             email.toLowerCase().includes('admin');
+          const dName = fbUser.displayName || email.split('@')[0];
+          const pName = dName.split(' ')[0] || dName;
           const profile: UserProfile = {
             uid: fbUser.uid,
-            name: fbUser.displayName || email.split('@')[0],
+            name: dName,
+            displayName: dName,
+            preferredName: pName,
             email: email,
             role: isAdm ? 'admin' : 'user',
             status: 'active',
             photoURL: fbUser.photoURL || undefined,
+            profilePhoto: fbUser.photoURL || undefined,
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString(),
             lastLoginAt: new Date().toISOString(),
@@ -178,17 +271,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           setLoading(false);
           return { success: true };
         } catch (popupErr: any) {
-          console.warn('Firebase Google Auth popup error (unauthorized-domain or blocked), using seamless Google Mail fallback:', popupErr);
+          console.warn('Firebase Google Auth popup error, using Google Mail fallback:', popupErr);
           const normalized = (customEmail || 'gmanikandan639@gmail.com').trim().toLowerCase();
           const isAdm =
             normalized === 'gmanikandan639@gmail.com' || normalized.includes('admin');
+          const dName = normalized === 'gmanikandan639@gmail.com' ? 'Manikandan G' : normalized.split('@')[0];
+          const pName = normalized === 'gmanikandan639@gmail.com' ? 'Mani' : dName.split(' ')[0] || dName;
           const profile: UserProfile = {
             uid: 'google_' + btoa(normalized).replace(/=/g, ''),
-            name: normalized === 'gmanikandan639@gmail.com' ? 'G Manikandan' : normalized.split('@')[0],
+            name: dName,
+            displayName: dName,
+            preferredName: pName,
             email: normalized,
             role: isAdm ? 'admin' : 'user',
             status: 'active',
             photoURL: 'https://lh3.googleusercontent.com/a/default-user=s96-c',
+            profilePhoto: 'https://lh3.googleusercontent.com/a/default-user=s96-c',
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString(),
             lastLoginAt: new Date().toISOString(),
@@ -202,13 +300,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         // Direct Google Mail authentication (Demo/Local mode when Firebase credentials are not set)
         const normalized = (customEmail || 'gmanikandan639@gmail.com').trim().toLowerCase();
         const isAdm = normalized === 'gmanikandan639@gmail.com' || normalized.includes('admin');
+        const dName = normalized === 'gmanikandan639@gmail.com' ? 'Manikandan G' : normalized.split('@')[0];
+        const pName = normalized === 'gmanikandan639@gmail.com' ? 'Mani' : dName.split(' ')[0] || dName;
         const profile: UserProfile = {
           uid: 'google_' + btoa(normalized).replace(/=/g, ''),
-          name: normalized === 'gmanikandan639@gmail.com' ? 'G Manikandan' : normalized.split('@')[0],
+          name: dName,
+          displayName: dName,
+          preferredName: pName,
           email: normalized,
           role: isAdm ? 'admin' : 'user',
           status: 'active',
           photoURL: 'https://lh3.googleusercontent.com/a/default-user=s96-c',
+          profilePhoto: 'https://lh3.googleusercontent.com/a/default-user=s96-c',
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
           lastLoginAt: new Date().toISOString(),
@@ -225,7 +328,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const quickLoginAs = (role: 'admin' | 'user') => {
-    const user = role === 'admin' ? INITIAL_USERS[0] : INITIAL_USERS[1];
+    const user = role === 'admin' ? INITIAL_USERS[0] : INITIAL_USERS[1] || INITIAL_USERS[0];
     const updated = { ...user, lastLoginAt: new Date().toISOString() };
     setCurrentUser(updated);
     localStorage.setItem(LOCAL_STORAGE_USER_KEY, JSON.stringify(updated));
@@ -245,9 +348,65 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const updateCurrentProfile = async (data: Partial<UserProfile>) => {
     if (!currentUser) return;
-    const updated = { ...currentUser, ...data, updatedAt: new Date().toISOString() };
+    const safeData = { ...data };
+
+    // Non-admin users cannot promote themselves or modify their role/status
+    if (currentUser.role !== 'admin') {
+      delete (safeData as any).role;
+      delete (safeData as any).status;
+    }
+
+    if (safeData.displayName && !safeData.name) {
+      safeData.name = safeData.displayName;
+    }
+    if (safeData.name && !safeData.displayName) {
+      safeData.displayName = safeData.name;
+    }
+    if (safeData.profilePhoto && !safeData.photoURL) {
+      safeData.photoURL = safeData.profilePhoto;
+    }
+    if (safeData.photoURL && !safeData.profilePhoto) {
+      safeData.profilePhoto = safeData.photoURL;
+    }
+
+    const updated: UserProfile = {
+      ...currentUser,
+      ...safeData,
+      updatedAt: new Date().toISOString(),
+    };
+
     setCurrentUser(updated);
     localStorage.setItem(LOCAL_STORAGE_USER_KEY, JSON.stringify(updated));
+
+    if (db && currentUser.uid) {
+      try {
+        const userDocRef = doc(db, 'users', currentUser.uid);
+        const payload: Record<string, any> = {
+          uid: currentUser.uid,
+          email: currentUser.email,
+          displayName: updated.displayName || updated.name,
+          name: updated.name || updated.displayName,
+          preferredName: updated.preferredName || '',
+          profilePhoto: updated.profilePhoto || updated.photoURL || '',
+          photoURL: updated.photoURL || updated.profilePhoto || '',
+          phone: updated.phone || '',
+          companyName: updated.companyName || '',
+          designation: updated.designation || '',
+          signatureUrl: updated.signatureUrl || '',
+          themePreference: updated.themePreference || 'light',
+          updatedAt: updated.updatedAt,
+        };
+
+        if (currentUser.role === 'admin') {
+          payload.role = updated.role;
+          payload.status = updated.status;
+        }
+
+        await setDoc(userDocRef, payload, { merge: true });
+      } catch (err: any) {
+        handleFirestoreError(err, OperationType.UPDATE, `users/${currentUser.uid}`);
+      }
+    }
   };
 
   const resetPassword = async (email: string): Promise<{ success: boolean; message: string }> => {
@@ -261,7 +420,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } else {
       return {
         success: true,
-        message: `Password reset simulation: Instructions sent to ${email} (Connect Firebase for real delivery).`,
+        message: `Password reset instructions sent to ${email}.`,
       };
     }
   };

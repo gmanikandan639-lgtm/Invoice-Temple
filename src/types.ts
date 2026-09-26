@@ -3,18 +3,40 @@ export type UserStatus = 'active' | 'disabled';
 
 export type UserProfile = {
   uid: string;
-  name: string;
+  name: string; // Kept for backward compatibility
+  displayName?: string;
+  preferredName?: string;
   email: string;
   phone?: string;
+  companyName?: string;
+  designation?: string;
+  signatureUrl?: string;
+  themePreference?: 'system' | 'light' | 'dark' | 'amber' | string;
   role: UserRole;
   status: UserStatus;
   photoURL?: string;
+  profilePhoto?: string;
   createdAt: string;
   updatedAt?: string;
   lastLogin?: string;
   lastLoginAt?: string;
   id?: string;
 };
+
+/**
+ * Returns the user's preferred name or display name for personalized greetings,
+ * invoice 'Created By', 'Prepared By', and user interfaces.
+ */
+export function getUserDisplayName(user?: Partial<UserProfile> | null): string {
+  if (!user) return 'User';
+  return (
+    user.preferredName?.trim() ||
+    user.displayName?.trim() ||
+    user.name?.trim() ||
+    user.email?.split('@')[0] ||
+    'User'
+  );
+}
 
 export type UserAccount = UserProfile;
 
@@ -233,6 +255,23 @@ export interface InvoiceSettings {
   defaultPaymentTerms: string;
   defaultNotes: string;
   defaultTermsAndConditions: string;
+
+  // Billing Field Display Settings (Show / Hide)
+  showHsnSac?: boolean; // Default false (Hide)
+  showUnit?: boolean; // Default false (Hide)
+  showDiscount?: boolean; // Default false (Hide)
+  showGst?: boolean; // Default false (Hide)
+  showCgst?: boolean; // Sub-control for CGST
+  showSgst?: boolean; // Sub-control for SGST
+  showIgst?: boolean; // Sub-control for IGST
+  showPaymentMode?: boolean; // Default true (Show)
+  showDueDate?: boolean; // Default true (Show)
+  showPoNumber?: boolean; // Default true (Show)
+  showNotes?: boolean; // Default true (Show)
+  showTerms?: boolean; // Default true (Show)
+  showBankDetails?: boolean; // Default true (Show)
+  showSignature?: boolean; // Default true (Show)
+
   updatedAt: string;
 }
 

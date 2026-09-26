@@ -37,17 +37,23 @@ export function calculateItemTaxes(
   discount: number,
   discountType: 'percentage' | 'fixed',
   gstRate: number,
-  isInterState: boolean
+  isInterState: boolean,
+  options?: {
+    disableGst?: boolean;
+    disableDiscount?: boolean;
+  }
 ): ItemCalculationResult {
   const qty = Number(quantity) || 0;
   const unitRate = Number(rate) || 0;
   const grossAmount = Math.round(qty * unitRate * 100) / 100;
 
   let discountAmount = 0;
-  if (discountType === 'percentage') {
-    discountAmount = Math.round((grossAmount * (Number(discount) || 0) / 100) * 100) / 100;
-  } else {
-    discountAmount = Math.min(grossAmount, Number(discount) || 0);
+  if (!options?.disableDiscount) {
+    if (discountType === 'percentage') {
+      discountAmount = Math.round((grossAmount * (Number(discount) || 0) / 100) * 100) / 100;
+    } else {
+      discountAmount = Math.min(grossAmount, Number(discount) || 0);
+    }
   }
 
   const taxableAmount = Math.max(0, Math.round((grossAmount - discountAmount) * 100) / 100);
@@ -56,14 +62,16 @@ export function calculateItemTaxes(
   let sgst = 0;
   let igst = 0;
 
-  const rateNum = Number(gstRate) || 0;
+  if (!options?.disableGst) {
+    const rateNum = Number(gstRate) || 0;
 
-  if (isInterState) {
-    igst = Math.round((taxableAmount * (rateNum / 100)) * 100) / 100;
-  } else {
-    const halfRate = rateNum / 2;
-    cgst = Math.round((taxableAmount * (halfRate / 100)) * 100) / 100;
-    sgst = Math.round((taxableAmount * (halfRate / 100)) * 100) / 100;
+    if (isInterState) {
+      igst = Math.round((taxableAmount * (rateNum / 100)) * 100) / 100;
+    } else {
+      const halfRate = rateNum / 2;
+      cgst = Math.round((taxableAmount * (halfRate / 100)) * 100) / 100;
+      sgst = Math.round((taxableAmount * (halfRate / 100)) * 100) / 100;
+    }
   }
 
   const total = Math.round((taxableAmount + cgst + sgst + igst) * 100) / 100;
@@ -90,7 +98,14 @@ export interface InvoiceTotals {
   grandTotal: number;
 }
 
-export function calculateInvoiceTotals(items: InvoiceItem[], applyRoundOff: boolean = true): InvoiceTotals {
+export function calculateInvoiceTotals(
+  items: InvoiceItem[],
+  applyRoundOff: boolean = true,
+  options?: {
+    disableGst?: boolean;
+    disableDiscount?: boolean;
+  }
+): InvoiceTotals {
   let subtotal = 0;
   let discount = 0;
   let taxableAmount = 0;
@@ -101,14 +116,22 @@ export function calculateInvoiceTotals(items: InvoiceItem[], applyRoundOff: bool
   items.forEach(item => {
     const gross = (Number(item.quantity) || 0) * (Number(item.rate) || 0);
     subtotal += gross;
-    const itemDisc = item.discountType === 'percentage'
-      ? (gross * (Number(item.discount) || 0)) / 100
-      : Number(item.discount) || 0;
+    
+    const itemDisc = !options?.disableDiscount
+      ? (item.discountType === 'percentage'
+          ? (gross * (Number(item.discount) || 0)) / 100
+          : Number(item.discount) || 0)
+      : 0;
     discount += itemDisc;
-    taxableAmount += Number(item.taxableAmount) || 0;
-    cgst += Number(item.cgst) || 0;
-    sgst += Number(item.sgst) || 0;
-    igst += Number(item.igst) || 0;
+
+    const itemTaxable = !options?.disableDiscount ? (Number(item.taxableAmount) || gross) : gross;
+    taxableAmount += itemTaxable;
+
+    if (!options?.disableGst) {
+      cgst += Number(item.cgst) || 0;
+      sgst += Number(item.sgst) || 0;
+      igst += Number(item.igst) || 0;
+    }
   });
 
   subtotal = Math.round(subtotal * 100) / 100;

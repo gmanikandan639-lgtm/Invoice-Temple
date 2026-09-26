@@ -41,7 +41,7 @@ interface DataContextType {
   companySettings: CompanySettings;
   updateCompanySettings: (settings: CompanySettings) => Promise<void>;
   invoiceSettings: InvoiceSettings;
-  updateInvoiceSettings: (settings: InvoiceSettings) => Promise<void>;
+  updateInvoiceSettings: (settings: Partial<InvoiceSettings> | InvoiceSettings) => Promise<void>;
   customers: Customer[];
   addCustomer: (customer: Omit<Customer, 'id' | 'createdAt' | 'updatedAt'>) => Promise<Customer>;
   updateCustomer: (id: string, data: Partial<Customer>) => Promise<void>;
@@ -107,12 +107,14 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return fallback;
   };
 
-  const [companySettings, setCompanySettings] = useState<CompanySettings>(() =>
-    loadLocal('company_settings', DEFAULT_COMPANY_SETTINGS)
-  );
-  const [invoiceSettings, setInvoiceSettings] = useState<InvoiceSettings>(() =>
-    loadLocal('invoice_settings', DEFAULT_INVOICE_SETTINGS)
-  );
+  const [companySettings, setCompanySettings] = useState<CompanySettings>(() => ({
+    ...DEFAULT_COMPANY_SETTINGS,
+    ...loadLocal('company_settings', DEFAULT_COMPANY_SETTINGS),
+  }));
+  const [invoiceSettings, setInvoiceSettings] = useState<InvoiceSettings>(() => ({
+    ...DEFAULT_INVOICE_SETTINGS,
+    ...loadLocal('invoice_settings', DEFAULT_INVOICE_SETTINGS),
+  }));
   const [customers, setCustomers] = useState<Customer[]>(() =>
     loadLocal('customers', INITIAL_CUSTOMERS)
   );
@@ -237,6 +239,20 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
           (err) => handleFirestoreError(err, OperationType.GET, 'settings/company')
         );
         unsubs.push(unsubCompany);
+
+        // Settings Invoice
+        const unsubInvoice = onSnapshot(
+          doc(db, 'settings', 'invoice'),
+          (d) => {
+            if (d.exists()) {
+              const data = d.data() as InvoiceSettings;
+              setInvoiceSettings((prev) => ({ ...prev, ...data }));
+              saveLocal('invoice_settings', { ...DEFAULT_INVOICE_SETTINGS, ...data });
+            }
+          },
+          (err) => handleFirestoreError(err, OperationType.GET, 'settings/invoice')
+        );
+        unsubs.push(unsubInvoice);
       } catch (err) {
         console.warn('Real-time listener setup exception:', err);
       }
@@ -303,14 +319,22 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const updateInvoiceSettings = async (newSettings: InvoiceSettings) => {
-    const updated = { ...newSettings, updatedAt: new Date().toISOString() };
+  const updateInvoiceSettings = async (newSettings: Partial<InvoiceSettings> | InvoiceSettings) => {
+    const updated: InvoiceSettings = {
+      ...invoiceSettings,
+      ...newSettings,
+      updatedAt: new Date().toISOString(),
+    };
     setInvoiceSettings(updated);
     saveLocal('invoice_settings', updated);
     logActivity('Invoice Settings Updated', 'Settings');
 
-    if (isConfigured && db && auth?.currentUser) {
-      await setDoc(doc(db, 'settings', 'invoice'), updated);
+    if (isConfigured && db) {
+      try {
+        await setDoc(doc(db, 'settings', 'invoice'), updated, { merge: true });
+      } catch (err) {
+        console.warn('Failed to update invoice settings in Firestore:', err);
+      }
     }
   };
 

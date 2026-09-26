@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useData } from '../../context/DataContext';
+import { getUserDisplayName } from '../../types';
 
 interface SidebarProps {
   currentPath: string;
@@ -121,7 +122,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           <div className="flex items-center gap-2">
             <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
             <span className="text-xs font-medium text-slate-300 truncate max-w-[130px]">
-              {currentUser?.name || 'User'}
+              {getUserDisplayName(currentUser)}
             </span>
           </div>
           <span

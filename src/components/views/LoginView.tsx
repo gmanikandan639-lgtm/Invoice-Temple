@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Lock, Mail, Eye, EyeOff, ShieldCheck, ArrowRight, Database, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { Lock, Mail, Eye, EyeOff, AlertCircle, ArrowRight } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { Modal } from '../common/Modal';
 
@@ -9,16 +9,14 @@ interface LoginViewProps {
 }
 
 export const LoginView: React.FC<LoginViewProps> = ({ onNavigate, onLoginSuccess }) => {
-  const { login, signInWithGoogle, quickLoginAs, resetPassword, isFirebaseMode } = useAuth();
+  const { login, signInWithGoogle, resetPassword } = useAuth();
 
-  const [email, setEmail] = useState('gmanikandan639@gmail.com');
-  const [password, setPassword] = useState('Admin@2026!');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
-  const [customGoogleEmail, setCustomGoogleEmail] = useState('');
-  const [showCustomGoogleInput, setShowCustomGoogleInput] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
 
   // Forgot password modal
@@ -31,44 +29,29 @@ export const LoginView: React.FC<LoginViewProps> = ({ onNavigate, onLoginSuccess
     if (onLoginSuccess) onLoginSuccess(path);
   };
 
-  const handleGoogleSignIn = async (overrideEmail?: string) => {
+  const handleGoogleSignIn = async () => {
     setErrorMessage('');
     setIsGoogleLoading(true);
-    const res = await signInWithGoogle(overrideEmail);
+    const res = await signInWithGoogle();
     setIsGoogleLoading(false);
 
     if (res.success) {
-      const activeEmail = (overrideEmail || 'gmanikandan639@gmail.com').toLowerCase();
-      const isAdm = activeEmail.includes('admin') || activeEmail === 'gmanikandan639@gmail.com';
-      handleSuccess(isAdm ? '/admin' : '/user');
+      handleSuccess('/dashboard');
     } else {
       setErrorMessage(res.error || 'Google authentication failed.');
     }
   };
 
-  const handleCustomGoogleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!customGoogleEmail.trim()) {
-      setErrorMessage('Please enter your Google Mail address.');
-      return;
-    }
-    if (!customGoogleEmail.includes('@')) {
-      setErrorMessage('Please enter a valid email address (e.g. name@gmail.com).');
-      return;
-    }
-    await handleGoogleSignIn(customGoogleEmail.trim());
-  };
-
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage('');
-    if (!email || !password) {
-      setErrorMessage('Please enter both email and password.');
+    if (!email.trim() || !password) {
+      setErrorMessage('Please enter both Work Email Address and Password.');
       return;
     }
 
     setIsLoading(true);
-    const res = await login(email, password);
+    const res = await login(email.trim(), password);
     setIsLoading(false);
 
     if (res.success) {
@@ -77,11 +60,6 @@ export const LoginView: React.FC<LoginViewProps> = ({ onNavigate, onLoginSuccess
     } else {
       setErrorMessage(res.error || 'Invalid credentials or account disabled.');
     }
-  };
-
-  const handleQuickDemoLogin = (role: 'admin' | 'user') => {
-    quickLoginAs(role);
-    handleSuccess(role === 'admin' ? '/admin' : '/user');
   };
 
   const handleForgotPasswordSubmit = async (e: React.FormEvent) => {
@@ -126,7 +104,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onNavigate, onLoginSuccess
           <form className="space-y-4" onSubmit={handleLogin}>
             <div>
               <label className="block text-xs font-semibold text-slate-300 mb-1.5">
-                Email Address
+                Work Email Address
               </label>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
@@ -138,7 +116,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onNavigate, onLoginSuccess
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   required
-                  placeholder="name@example.com"
+                  placeholder="work.email@company.com"
                   className="w-full pl-9 pr-3 py-2.5 bg-slate-900/80 border border-slate-700 rounded-xl text-white text-sm focus:outline-hidden focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition-all placeholder:text-slate-500"
                 />
               </div>
@@ -255,88 +233,6 @@ export const LoginView: React.FC<LoginViewProps> = ({ onNavigate, onLoginSuccess
               )}
               <span>Continue with Google</span>
             </button>
-
-            {/* Quick Admin direct access */}
-            <button
-              type="button"
-              onClick={() => handleGoogleSignIn('gmanikandan639@gmail.com')}
-              className="w-full flex items-center justify-between px-3 py-2 rounded-xl bg-slate-900/40 hover:bg-slate-900/80 border border-slate-700/60 text-xs text-slate-300 hover:text-white transition-colors cursor-pointer"
-            >
-              <div className="flex items-center gap-2 truncate">
-                <span className="w-2 h-2 rounded-full bg-emerald-400" />
-                <span className="truncate font-medium text-[11px]">gmanikandan639@gmail.com</span>
-              </div>
-              <span className="text-[10px] font-bold text-amber-400 uppercase tracking-wider bg-amber-500/10 px-2 py-0.5 rounded-md border border-amber-500/20">
-                Admin
-              </span>
-            </button>
-
-            {/* Custom Google Email toggle */}
-            {!showCustomGoogleInput ? (
-              <button
-                type="button"
-                onClick={() => setShowCustomGoogleInput(true)}
-                className="w-full text-center text-[11px] text-slate-400 hover:text-amber-400 transition-colors cursor-pointer pt-0.5"
-              >
-                Sign in with another Google Mail
-              </button>
-            ) : (
-              <form onSubmit={handleCustomGoogleSubmit} className="pt-2 space-y-2">
-                <div className="relative">
-                  <Mail className="w-4 h-4 absolute left-3 top-2.5 text-slate-400 pointer-events-none" />
-                  <input
-                    type="email"
-                    value={customGoogleEmail}
-                    onChange={(e) => setCustomGoogleEmail(e.target.value)}
-                    placeholder="Enter Google Mail (e.g. user@gmail.com)"
-                    className="w-full pl-9 pr-3 py-2 bg-slate-900 border border-slate-700 rounded-xl text-white text-xs focus:ring-2 focus:ring-amber-500 focus:outline-hidden"
-                  />
-                </div>
-                <div className="flex gap-2">
-                  <button
-                    type="submit"
-                    disabled={isGoogleLoading}
-                    className="flex-1 py-1.5 px-3 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs rounded-xl transition-colors cursor-pointer"
-                  >
-                    Authenticate
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setShowCustomGoogleInput(false)}
-                    className="py-1.5 px-3 bg-slate-700 hover:bg-slate-600 text-slate-300 text-xs rounded-xl transition-colors cursor-pointer"
-                  >
-                    Cancel
-                  </button>
-                </div>
-              </form>
-            )}
-          </div>
-
-          {/* Quick Demo Login shortcuts */}
-          <div className="mt-6 pt-5 border-t border-slate-700/80">
-            <p className="text-[10px] uppercase font-bold text-slate-400 tracking-wider text-center mb-2.5">
-              Quick Role Testing
-            </p>
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                id="quick-login-admin"
-                type="button"
-                onClick={() => handleQuickDemoLogin('admin')}
-                className="flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl bg-slate-700/50 hover:bg-slate-700 text-amber-400 border border-slate-600/80 text-xs font-semibold transition-colors cursor-pointer"
-              >
-                <ShieldCheck className="w-3.5 h-3.5" />
-                Admin Access
-              </button>
-              <button
-                id="quick-login-user"
-                type="button"
-                onClick={() => handleQuickDemoLogin('user')}
-                className="flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl bg-slate-700/50 hover:bg-slate-700 text-slate-200 border border-slate-600/80 text-xs font-semibold transition-colors cursor-pointer"
-              >
-                <Database className="w-3.5 h-3.5" />
-                Staff Access
-              </button>
-            </div>
           </div>
         </div>
       </div>
