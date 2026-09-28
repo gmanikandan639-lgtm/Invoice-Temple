@@ -75,6 +75,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       icon: Bell,
       badge: unreadNotificationCount > 0 ? unreadNotificationCount : undefined,
     },
+    { label: 'Settings', path: '/settings', icon: Settings },
     { label: 'Profile', path: '/profile', icon: UserCircle },
   ];
 

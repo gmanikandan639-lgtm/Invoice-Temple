@@ -19,8 +19,11 @@ import {
   FileText,
   X,
   Check,
+  ImageIcon,
+  Trash2,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
+import { useData } from '../../context/DataContext';
 import { formatDate } from '../../utils/formatters';
 import { useToast } from '../common/Toast';
 import { getUserDisplayName } from '../../types';
@@ -50,6 +53,7 @@ const PRESET_AVATARS = [
 
 export const ProfileView: React.FC = () => {
   const { currentUser, role, updateCurrentProfile, resetPassword } = useAuth();
+  const { companySettings, updateCompanySettings } = useData();
   const { showToast } = useToast();
 
   const [displayName, setDisplayName] = useState('');
@@ -67,6 +71,7 @@ export const ProfileView: React.FC = () => {
 
   const photoFileInputRef = useRef<HTMLInputElement>(null);
   const sigFileInputRef = useRef<HTMLInputElement>(null);
+  const logoFileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (currentUser) {
@@ -119,6 +124,37 @@ export const ProfileView: React.FC = () => {
       setSignatureUrl(dataUrl);
     };
     reader.readAsDataURL(file);
+  };
+
+  const handleLogoFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 2 * 1024 * 1024) {
+      showToast('Logo file size must be less than 2MB', 'error');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+      const dataUrl = event.target?.result as string;
+      try {
+        await updateCompanySettings({ ...companySettings, logoUrl: dataUrl });
+        showToast('Company logo updated successfully!');
+      } catch (err: any) {
+        showToast('Failed to update logo: ' + err.message, 'error');
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleRemoveLogo = async () => {
+    try {
+      await updateCompanySettings({ ...companySettings, logoUrl: '' });
+      showToast('Company logo removed');
+    } catch (err: any) {
+      showToast('Failed to remove logo: ' + err.message, 'error');
+    }
   };
 
   const handleProfileSave = async (e: React.FormEvent) => {
@@ -598,6 +634,69 @@ export const ProfileView: React.FC = () => {
                     <span className="text-[11px] text-slate-400 italic">No signature uploaded</span>
                   )}
                 </div>
+              </div>
+            </div>
+
+            {/* Company Logo Configuration Section (replaces top-right TAX INVOICE) */}
+            <div className="sm:col-span-2 p-4 bg-slate-50/80 rounded-2xl border border-slate-200 space-y-3">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <div>
+                  <label className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
+                    <ImageIcon className="w-4 h-4 text-amber-500" />
+                    Company Logo (Invoice Header Top-Right)
+                  </label>
+                  <p className="text-[11px] text-slate-500 mt-0.5">
+                    Configures the company logo displayed at the top-right of all invoices, PDFs, image exports, and print copies.
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <input
+                    ref={logoFileInputRef}
+                    type="file"
+                    accept="image/png, image/jpeg, image/jpg, image/webp"
+                    onChange={handleLogoFileUpload}
+                    className="hidden"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => logoFileInputRef.current?.click()}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 shadow-2xs transition-colors cursor-pointer"
+                  >
+                    <Upload className="w-3.5 h-3.5" />
+                    {companySettings?.logoUrl ? 'Replace Logo' : 'Upload Logo'}
+                  </button>
+                  {companySettings?.logoUrl && (
+                    <button
+                      type="button"
+                      onClick={handleRemoveLogo}
+                      className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-xs font-semibold text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      Remove
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              <div className="flex flex-col sm:flex-row items-center gap-4">
+                {/* Logo Preview (maintains aspect ratio, never distorted) */}
+                <div className="w-40 h-20 bg-white border border-dashed border-slate-300 rounded-xl flex items-center justify-center p-2 overflow-hidden shadow-2xs shrink-0">
+                  {companySettings?.logoUrl ? (
+                    <img
+                      src={companySettings.logoUrl}
+                      alt="Company Logo Preview"
+                      className="max-h-full max-w-full object-contain"
+                    />
+                  ) : (
+                    <span className="text-[11px] text-slate-400 italic">No logo configured</span>
+                  )}
+                </div>
+                <p className="text-[11px] text-slate-400">
+                  Supported formats: <strong>PNG, JPG, JPEG, WEBP</strong>.
+                  <br />
+                  If no logo is configured, invoice headers display cleanly without any broken image placeholder.
+                </p>
               </div>
             </div>
           </div>

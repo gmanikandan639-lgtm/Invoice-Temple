@@ -1368,14 +1368,13 @@ export const InvoiceCreateView: React.FC<InvoiceCreateViewProps> = ({
             <div className="flex flex-col sm:flex-row justify-between items-start gap-4 border-b border-slate-200 pb-4">
               <div>
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-amber-500 text-slate-950 font-black text-lg flex items-center justify-center">
+                  <div className="w-10 h-10 rounded-xl bg-amber-500 text-slate-950 font-black text-lg flex items-center justify-center shrink-0">
                     IT
                   </div>
                   <div>
                     <h3 className="text-lg font-black text-slate-900 tracking-tight">
                       {companySettings.companyName}
                     </h3>
-                    <p className="text-[11px] text-slate-500">Tax Invoice / Bill of Supply</p>
                   </div>
                 </div>
                 <p className="text-xs text-slate-600 mt-2 max-w-sm leading-relaxed">
@@ -1383,18 +1382,16 @@ export const InvoiceCreateView: React.FC<InvoiceCreateViewProps> = ({
                 </p>
               </div>
 
-              <div className="sm:text-right space-y-0.5">
-                <span className="text-[10px] uppercase font-extrabold tracking-wider bg-slate-900 text-white px-2.5 py-1 rounded-md inline-block">
-                  TAX INVOICE
-                </span>
-                <p className="text-base font-black text-slate-900 mt-1">{invoiceNumber || 'INV-DRAFT'}</p>
-                <p className="text-xs text-slate-600">
-                  <strong>Date:</strong> {formatInvoiceDate(invoiceDate)}
-                </p>
-                <p className="text-xs text-slate-600">
-                  <strong>Due Date:</strong> {formatInvoiceDate(dueDate)}
-                </p>
-              </div>
+              {/* User-configured company logo (replaces top-right TAX INVOICE block) */}
+              {invoiceSettings.showLogo !== false && companySettings.logoUrl ? (
+                <div className="flex sm:justify-end items-center self-start shrink-0">
+                  <img
+                    src={companySettings.logoUrl}
+                    alt={companySettings.companyName || 'Company Logo'}
+                    className="max-h-20 max-w-[180px] sm:max-w-[200px] w-auto h-auto object-contain rounded-lg shadow-xs"
+                  />
+                </div>
+              ) : null}
             </div>
 
             {/* Bill To & TAX INVOICE Card */}

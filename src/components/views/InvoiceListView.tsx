@@ -11,6 +11,7 @@ import {
   XCircle,
   Edit2,
   Bookmark,
+  Image as ImageIcon,
 } from 'lucide-react';
 import { useData } from '../../context/DataContext';
 import { useAuth } from '../../context/AuthContext';
@@ -405,6 +406,14 @@ export const InvoiceListView: React.FC<InvoiceListViewProps> = ({ onNavigate }) 
                           className="p-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg transition-colors cursor-pointer"
                         >
                           <Eye className="w-3.5 h-3.5" />
+                        </button>
+
+                        <button
+                          onClick={() => onNavigate(`/invoice/${inv.id}`)}
+                          title="Export Invoice as Image (PNG) / PDF"
+                          className="p-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg transition-colors cursor-pointer"
+                        >
+                          <ImageIcon className="w-3.5 h-3.5" />
                         </button>
 
                         {inv.invoiceStatus !== 'Cancelled' && inv.invoiceStatus !== 'Draft' && inv.balanceAmount > 0 && (

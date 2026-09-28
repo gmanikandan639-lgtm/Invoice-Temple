@@ -275,6 +275,8 @@ export interface InvoiceSettings {
   showTerms?: boolean; // Default true (Show)
   showBankDetails?: boolean; // Default true (Show)
   showSignature?: boolean; // Default true (Show)
+  showDescription?: boolean; // Default true (Show)
+  showLogo?: boolean; // Default true (Show)
 
   updatedAt: string;
 }

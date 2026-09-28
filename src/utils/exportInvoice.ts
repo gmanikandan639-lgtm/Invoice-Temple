@@ -2,7 +2,25 @@ import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
 
 /**
- * Downloads a DOM element as a high-resolution PNG image.
+ * Ensures all images inside an element are fully loaded before capturing
+ */
+async function waitForElementImages(element: HTMLElement): Promise<void> {
+  const images = Array.from(element.querySelectorAll('img'));
+  await Promise.all(
+    images.map((img) => {
+      if (img.complete && img.naturalHeight !== 0) {
+        return Promise.resolve();
+      }
+      return new Promise<void>((resolve) => {
+        img.onload = () => resolve();
+        img.onerror = () => resolve();
+      });
+    })
+  );
+}
+
+/**
+ * Downloads a DOM element as a high-resolution, uncropped PNG image.
  */
 export async function downloadInvoiceImage(
   elementId: string,
@@ -13,17 +31,42 @@ export async function downloadInvoiceImage(
     throw new Error(`Element with id "${elementId}" not found`);
   }
 
-  // Render to canvas with high resolution scale
+  // Pre-load all images (logo, signature, QR, etc.)
+  await waitForElementImages(element);
+
+  const safeFilename = filename.replace(/[/\\?%*:|"<>]/g, '_');
+
+  // Render to canvas with high resolution scale and full bounds
   const canvas = await html2canvas(element, {
     scale: 2,
     useCORS: true,
+    allowTaint: true,
     logging: false,
     backgroundColor: '#ffffff',
+    scrollX: 0,
+    scrollY: 0,
+    windowWidth: Math.max(element.scrollWidth, 1024),
+    windowHeight: element.scrollHeight,
+    onclone: (clonedDoc) => {
+      const clonedElement = clonedDoc.getElementById(elementId);
+      if (clonedElement) {
+        clonedElement.style.overflow = 'visible';
+        clonedElement.style.maxHeight = 'none';
+        clonedElement.style.height = 'auto';
+        clonedElement.style.width = '100%';
+        // Ensure no child table or scroll container clips content
+        const scrollContainers = clonedElement.querySelectorAll('.overflow-x-auto, [class*="overflow-"]');
+        scrollContainers.forEach((c) => {
+          (c as HTMLElement).style.overflow = 'visible';
+          (c as HTMLElement).style.maxHeight = 'none';
+        });
+      }
+    },
   });
 
   const imgData = canvas.toDataURL('image/png');
   const link = document.createElement('a');
-  link.download = `${filename}.png`;
+  link.download = `${safeFilename}.png`;
   link.href = imgData;
   document.body.appendChild(link);
   link.click();
@@ -42,11 +85,35 @@ export async function downloadInvoicePdf(
     throw new Error(`Element with id "${elementId}" not found`);
   }
 
+  // Pre-load all images (logo, signature, QR, etc.)
+  await waitForElementImages(element);
+
+  const safeFilename = filename.replace(/[/\\?%*:|"<>]/g, '_');
+
   const canvas = await html2canvas(element, {
     scale: 2,
     useCORS: true,
+    allowTaint: true,
     logging: false,
     backgroundColor: '#ffffff',
+    scrollX: 0,
+    scrollY: 0,
+    windowWidth: Math.max(element.scrollWidth, 1024),
+    windowHeight: element.scrollHeight,
+    onclone: (clonedDoc) => {
+      const clonedElement = clonedDoc.getElementById(elementId);
+      if (clonedElement) {
+        clonedElement.style.overflow = 'visible';
+        clonedElement.style.maxHeight = 'none';
+        clonedElement.style.height = 'auto';
+        clonedElement.style.width = '100%';
+        const scrollContainers = clonedElement.querySelectorAll('.overflow-x-auto, [class*="overflow-"]');
+        scrollContainers.forEach((c) => {
+          (c as HTMLElement).style.overflow = 'visible';
+          (c as HTMLElement).style.maxHeight = 'none';
+        });
+      }
+    },
   });
 
   const imgWidth = 210; // A4 width in mm
@@ -67,5 +134,6 @@ export async function downloadInvoicePdf(
     heightLeft -= pageHeight;
   }
 
-  pdf.save(`${filename}.pdf`);
+  pdf.save(`${safeFilename}.pdf`);
 }
+

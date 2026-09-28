@@ -107,12 +107,20 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return fallback;
   };
 
-  const [companySettings, setCompanySettings] = useState<CompanySettings>(() => ({
-    ...DEFAULT_COMPANY_SETTINGS,
-    ...loadLocal('company_settings', DEFAULT_COMPANY_SETTINGS),
-  }));
+  const [companySettings, setCompanySettings] = useState<CompanySettings>(() => {
+    const loaded = loadLocal<CompanySettings>('company_settings', DEFAULT_COMPANY_SETTINGS);
+    // If the cached logoUrl is the old unsplash dummy photo, reset to empty
+    if (loaded && typeof loaded.logoUrl === 'string' && loaded.logoUrl.includes('unsplash.com/photo-1572021335469')) {
+      loaded.logoUrl = '';
+    }
+    return {
+      ...DEFAULT_COMPANY_SETTINGS,
+      ...loaded,
+    };
+  });
   const [invoiceSettings, setInvoiceSettings] = useState<InvoiceSettings>(() => ({
     ...DEFAULT_INVOICE_SETTINGS,
+    showLogo: true,
     ...loadLocal('invoice_settings', DEFAULT_INVOICE_SETTINGS),
   }));
   const [customers, setCustomers] = useState<Customer[]>(() =>

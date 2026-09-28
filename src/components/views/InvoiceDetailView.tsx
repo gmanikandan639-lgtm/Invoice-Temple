@@ -45,6 +45,13 @@ export const InvoiceDetailView: React.FC<InvoiceDetailViewProps> = ({
     showShipping = true,
     showGst = true,
     showDescription = true,
+    showDueDate = true,
+    showPoNumber = true,
+    showNotes = true,
+    showTerms = true,
+    showBankDetails = true,
+    showSignature = true,
+    showLogo = true,
   } = invoiceSettings || {};
 
   const invoice = invoices.find((inv) => inv.id === invoiceId);
@@ -303,11 +310,11 @@ export const InvoiceDetailView: React.FC<InvoiceDetailViewProps> = ({
           <button
             onClick={handleDownloadImage}
             disabled={isExporting}
-            className="flex items-center gap-1.5 px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-bold rounded-xl transition-colors cursor-pointer disabled:opacity-50"
-            title="Export PNG Image"
+            className="flex items-center gap-1.5 px-3 py-2 bg-blue-50 hover:bg-blue-100 text-blue-800 text-xs font-bold rounded-xl transition-colors cursor-pointer disabled:opacity-50 border border-blue-200"
+            title="Download Invoice as Image (PNG)"
           >
             <ImageIcon className="w-4 h-4 text-blue-600" />
-            Image
+            Download Image
           </button>
 
           {/* Share button */}
@@ -370,18 +377,17 @@ export const InvoiceDetailView: React.FC<InvoiceDetailViewProps> = ({
             ======================= */}
         {template === 'classic' && (
           <div className="space-y-8">
-            {/* Header: Company & Tax Invoice Badge */}
+            {/* Header: Company Details & Top-Right Company Logo */}
             <div className="flex flex-col sm:flex-row justify-between items-start gap-4 border-b border-slate-200 pb-6">
               <div>
                 <div className="flex items-center gap-3">
-                  <div className="w-12 h-12 rounded-xl bg-amber-500 text-slate-950 font-black text-xl flex items-center justify-center">
+                  <div className="w-12 h-12 rounded-xl bg-amber-500 text-slate-950 font-black text-xl flex items-center justify-center shrink-0">
                     IT
                   </div>
                   <div>
                     <h1 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">
                       {companySettings.companyName}
                     </h1>
-                    <p className="text-xs text-slate-500">Tax Invoice / Bill of Supply</p>
                   </div>
                 </div>
                 <p className="text-xs text-slate-600 mt-3 max-w-sm leading-relaxed">
@@ -394,34 +400,19 @@ export const InvoiceDetailView: React.FC<InvoiceDetailViewProps> = ({
                 </div>
               </div>
 
-              <div className="sm:text-right space-y-1">
-                <span className="text-xs uppercase font-extrabold tracking-wider bg-slate-900 text-white px-3 py-1 rounded-md inline-block">
-                  TAX INVOICE
-                </span>
-                <p className="text-lg font-black text-slate-900 mt-2">{invoice.invoiceNumber}</p>
-                <p className="text-xs text-slate-600">
-                  <strong>Date:</strong> {formatInvoiceDate(invoice.invoiceDate)}
-                </p>
-                <p className="text-xs text-slate-600">
-                  <strong>Due Date:</strong> {formatInvoiceDate(invoice.dueDate)}
-                </p>
-                {invoice.deliveryNote && (
-                  <p className="text-xs text-slate-600">
-                    <strong>Delivery Note:</strong> {invoice.deliveryNote}
-                  </p>
-                )}
-                {invoice.poNumber && (
-                  <p className="text-xs text-slate-600">
-                    <strong>PO No:</strong> {invoice.poNumber}
-                  </p>
-                )}
-                <p className="text-xs text-slate-600">
-                  <strong>Place of Supply:</strong> {invoice.placeOfSupply}
-                </p>
-              </div>
+              {/* User-configured company logo (replaces top-right TAX INVOICE block) */}
+              {showLogo && companySettings.logoUrl ? (
+                <div className="flex sm:justify-end items-center self-start shrink-0">
+                  <img
+                    src={companySettings.logoUrl}
+                    alt={companySettings.companyName || 'Company Logo'}
+                    className="max-h-24 max-w-[200px] sm:max-w-[240px] w-auto h-auto object-contain rounded-lg shadow-xs"
+                  />
+                </div>
+              ) : null}
             </div>
 
-            {/* Bill To & TAX INVOICE Details */}
+            {/* Bill To & TAX INVOICE Details (Authoritative remaining invoice details section) */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 bg-slate-50/70 p-5 rounded-2xl border border-slate-200/60">
               <div>
                 <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">
@@ -457,13 +448,17 @@ export const InvoiceDetailView: React.FC<InvoiceDetailViewProps> = ({
                   <p>
                     <strong className="text-slate-900">Invoice Date:</strong> {formatInvoiceDate(invoice.invoiceDate)}
                   </p>
-                  <p>
-                    <strong className="text-slate-900">Due Date:</strong> {formatInvoiceDate(invoice.dueDate)}
-                  </p>
-                  <p>
-                    <strong className="text-slate-900">Delivery Note:</strong> {invoice.deliveryNote || '-'}
-                  </p>
-                  {invoice.poNumber && (
+                  {showDueDate && (
+                    <p>
+                      <strong className="text-slate-900">Due Date:</strong> {formatInvoiceDate(invoice.dueDate)}
+                    </p>
+                  )}
+                  {invoice.deliveryNote && (
+                    <p>
+                      <strong className="text-slate-900">Delivery Note:</strong> {invoice.deliveryNote}
+                    </p>
+                  )}
+                  {showPoNumber && invoice.poNumber && (
                     <p>
                       <strong className="text-slate-900">PO No:</strong> {invoice.poNumber}
                     </p>
@@ -709,17 +704,14 @@ export const InvoiceDetailView: React.FC<InvoiceDetailViewProps> = ({
         {template === 'modern' && (
           <div className="space-y-8">
             {/* Modern Header */}
-            <div className="flex flex-col sm:flex-row justify-between items-start gap-4 pb-6">
+            <div className="flex flex-col sm:flex-row justify-between items-start gap-4 pb-6 border-b border-slate-200">
               <div>
                 <div className="flex items-center gap-3">
-                  <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-amber-500 to-amber-400 text-slate-950 font-black text-xl flex items-center justify-center shadow-md">
+                  <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-amber-500 to-amber-400 text-slate-950 font-black text-xl flex items-center justify-center shadow-md shrink-0">
                     IT
                   </div>
                   <div>
                     <h1 className="text-2xl font-black text-slate-900">{companySettings.companyName}</h1>
-                    <p className="text-xs font-semibold text-amber-600 uppercase tracking-wider">
-                      Tax Invoice &bull; GST Registered Enterprise
-                    </p>
                   </div>
                 </div>
                 <p className="text-xs text-slate-500 mt-2 max-w-sm">
@@ -730,18 +722,16 @@ export const InvoiceDetailView: React.FC<InvoiceDetailViewProps> = ({
                 </p>
               </div>
 
-              <div className="bg-slate-900 text-white p-4 rounded-2xl sm:text-right min-w-[220px]">
-                <span className="text-[10px] font-bold text-amber-400 uppercase tracking-wider block">
-                  Invoice Reference
-                </span>
-                <p className="text-lg font-black">{invoice.invoiceNumber}</p>
-                <div className="text-xs text-slate-300 mt-2 space-y-0.5">
-                  <p>Issue Date: {formatInvoiceDate(invoice.invoiceDate)}</p>
-                  <p>Due Date: {formatInvoiceDate(invoice.dueDate)}</p>
-                  {invoice.deliveryNote && <p>Delivery Note: {invoice.deliveryNote}</p>}
-                  <p>POS: {invoice.placeOfSupply}</p>
+              {/* Top-Right: User Company Logo */}
+              {showLogo && companySettings.logoUrl ? (
+                <div className="flex sm:justify-end items-center self-start shrink-0">
+                  <img
+                    src={companySettings.logoUrl}
+                    alt={companySettings.companyName || 'Company Logo'}
+                    className="max-h-24 max-w-[200px] sm:max-w-[240px] w-auto h-auto object-contain rounded-lg shadow-xs"
+                  />
                 </div>
-              </div>
+              ) : null}
             </div>
 
             {/* Client Snapshot */}
@@ -772,9 +762,9 @@ export const InvoiceDetailView: React.FC<InvoiceDetailViewProps> = ({
                 </span>
                 <p><strong className="text-slate-900">Invoice Number:</strong> {invoice.invoiceNumber}</p>
                 <p><strong className="text-slate-900">Invoice Date:</strong> {formatInvoiceDate(invoice.invoiceDate)}</p>
-                <p><strong className="text-slate-900">Due Date:</strong> {formatInvoiceDate(invoice.dueDate)}</p>
-                <p><strong className="text-slate-900">Delivery Note:</strong> {invoice.deliveryNote || '-'}</p>
-                {invoice.poNumber && <p><strong className="text-slate-900">PO No:</strong> {invoice.poNumber}</p>}
+                {showDueDate && <p><strong className="text-slate-900">Due Date:</strong> {formatInvoiceDate(invoice.dueDate)}</p>}
+                {invoice.deliveryNote && <p><strong className="text-slate-900">Delivery Note:</strong> {invoice.deliveryNote}</p>}
+                {showPoNumber && invoice.poNumber && <p><strong className="text-slate-900">PO No:</strong> {invoice.poNumber}</p>}
                 {invoice.placeOfSupply && <p><strong className="text-slate-900">Place of Supply:</strong> {invoice.placeOfSupply}</p>}
               </div>
             </div>
@@ -917,19 +907,20 @@ export const InvoiceDetailView: React.FC<InvoiceDetailViewProps> = ({
         {template === 'gst' && (
           <div className="space-y-4 text-xs">
             {/* Boxed GST Header */}
-            <div className="border border-slate-900 p-3 grid grid-cols-2 gap-2">
+            <div className="border border-slate-900 p-3 grid grid-cols-2 gap-2 items-center">
               <div>
                 <h3 className="font-black text-sm uppercase">{companySettings.companyName}</h3>
                 <p>{companySettings.address}, {companySettings.city}, {companySettings.state}</p>
                 <p><strong>GSTIN:</strong> {companySettings.gstin} | <strong>PAN:</strong> {companySettings.pan}</p>
               </div>
-              <div className="text-right">
-                <h2 className="font-black text-base">TAX INVOICE</h2>
-                <p><strong>Inv No:</strong> {invoice.invoiceNumber}</p>
-                <p><strong>Date:</strong> {formatInvoiceDate(invoice.invoiceDate)}</p>
-                <p><strong>Due Date:</strong> {formatInvoiceDate(invoice.dueDate)}</p>
-                <p><strong>Delivery Note:</strong> {invoice.deliveryNote || '-'}</p>
-                <p><strong>Place of Supply:</strong> {invoice.placeOfSupply}</p>
+              <div className="flex justify-end items-center">
+                {showLogo && companySettings.logoUrl ? (
+                  <img
+                    src={companySettings.logoUrl}
+                    alt={companySettings.companyName || 'Company Logo'}
+                    className="max-h-16 max-w-[160px] object-contain"
+                  />
+                ) : null}
               </div>
             </div>
 
@@ -945,8 +936,10 @@ export const InvoiceDetailView: React.FC<InvoiceDetailViewProps> = ({
                 <p className="font-bold uppercase text-[10px] text-slate-900">TAX INVOICE</p>
                 <p><strong>Invoice Number:</strong> {invoice.invoiceNumber}</p>
                 <p><strong>Invoice Date:</strong> {formatInvoiceDate(invoice.invoiceDate)}</p>
-                <p><strong>Due Date:</strong> {formatInvoiceDate(invoice.dueDate)}</p>
-                <p><strong>Delivery Note:</strong> {invoice.deliveryNote || '-'}</p>
+                {showDueDate && <p><strong>Due Date:</strong> {formatInvoiceDate(invoice.dueDate)}</p>}
+                {invoice.deliveryNote && <p><strong>Delivery Note:</strong> {invoice.deliveryNote}</p>}
+                {showPoNumber && invoice.poNumber && <p><strong>PO No:</strong> {invoice.poNumber}</p>}
+                {invoice.placeOfSupply && <p><strong>Place of Supply:</strong> {invoice.placeOfSupply}</p>}
               </div>
             </div>
 

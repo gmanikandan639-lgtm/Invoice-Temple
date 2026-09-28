@@ -137,18 +137,12 @@ const RouterContent: React.FC = () => {
         );
 
       case '/admin/settings/company':
-        return role === 'admin' ? (
-          <SettingsView initialTab="company" />
-        ) : (
-          <UserDashboardView onNavigate={navigate} />
-        );
+      case '/settings/company':
+        return <SettingsView initialTab="company" />;
 
       case '/admin/settings/invoice':
-        return role === 'admin' ? (
-          <SettingsView initialTab="invoice" />
-        ) : (
-          <UserDashboardView onNavigate={navigate} />
-        );
+      case '/settings/invoice':
+        return <SettingsView initialTab="invoice" />;
 
       case '/settings':
         return <SettingsView />;

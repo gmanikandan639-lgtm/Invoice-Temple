@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   Building,
   FileText,
@@ -9,6 +9,8 @@ import {
   Upload,
   QrCode,
   ShieldCheck,
+  Image as ImageIcon,
+  Trash2,
 } from 'lucide-react';
 import { useData } from '../../context/DataContext';
 import { useAuth } from '../../context/AuthContext';
@@ -42,12 +44,15 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ initialTab = 'compan
     showShipping: invoiceSettings?.showShipping !== false,
     showGst: invoiceSettings?.showGst !== false,
     showDescription: invoiceSettings?.showDescription !== false,
+    showLogo: invoiceSettings?.showLogo !== false,
     defaultNotes: invoiceSettings?.defaultNotes || '',
     defaultTerms: invoiceSettings?.defaultTerms || '',
     autoRoundOff: invoiceSettings?.autoRoundOff ?? true,
     prefix: invoiceSettings?.prefix || '',
     nextNumber: invoiceSettings?.nextNumber || 1,
   });
+
+  const logoInputRef = useRef<HTMLInputElement>(null);
 
   React.useEffect(() => {
     if (invoiceSettings) {
@@ -58,6 +63,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ initialTab = 'compan
         showShipping: invoiceSettings.showShipping !== false,
         showGst: invoiceSettings.showGst !== false,
         showDescription: invoiceSettings.showDescription !== false,
+        showLogo: invoiceSettings.showLogo !== false,
         defaultNotes: invoiceSettings.defaultNotes || '',
         defaultTerms: invoiceSettings.defaultTerms || '',
         autoRoundOff: invoiceSettings.autoRoundOff ?? true,
@@ -66,6 +72,49 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ initialTab = 'compan
       });
     }
   }, [invoiceSettings]);
+
+  const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Check file format: PNG, JPG, JPEG, WEBP
+    const validExtensions = ['.png', '.jpg', '.jpeg', '.webp'];
+    const validMimes = ['image/png', 'image/jpeg', 'image/jpg', 'image/webp'];
+    const fileName = file.name.toLowerCase();
+    const hasValidExt = validExtensions.some((ext) => fileName.endsWith(ext));
+    if (!validMimes.includes(file.type) && !hasValidExt) {
+      showToast('Supported formats: PNG, JPG, JPEG, WEBP', 'error');
+      return;
+    }
+
+    // Check file size (max 2MB)
+    if (file.size > 2 * 1024 * 1024) {
+      showToast('Logo file size must be less than 2MB', 'error');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const dataUrl = event.target?.result as string;
+      if (dataUrl) {
+        setFormData((prev) => ({
+          ...prev,
+          logoUrl: dataUrl,
+        }));
+        showToast('Company logo updated! Click "Save Changes" to apply.');
+      }
+    };
+    reader.readAsDataURL(file);
+    e.target.value = '';
+  };
+
+  const handleRemoveLogo = () => {
+    setFormData((prev) => ({
+      ...prev,
+      logoUrl: '',
+    }));
+    showToast('Company logo removed. Header will render clean without logo.');
+  };
 
   const handleTextChange = (field: keyof CompanySettings, value: any) => {
     setFormData((prev) => ({
@@ -183,8 +232,83 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ initialTab = 'compan
       <form onSubmit={handleSave} className="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-xs space-y-6">
         {/* ================= COMPANY TAB ================= */}
         {activeTab === 'company' && (
-          <div className="space-y-4">
-            <h3 className="text-xs font-extrabold uppercase tracking-wider text-slate-400">
+          <div className="space-y-6">
+            {/* Company Logo Configuration Area */}
+            <div className="p-4 bg-slate-50/80 rounded-2xl border border-slate-200/90 space-y-3">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <div>
+                  <h4 className="text-xs font-extrabold uppercase tracking-wider text-slate-900 flex items-center gap-1.5">
+                    <ImageIcon className="w-3.5 h-3.5 text-amber-500" />
+                    Company Logo (Invoice Header Top-Right)
+                  </h4>
+                  <p className="text-[11px] text-slate-500 mt-0.5">
+                    Upload your official company logo. It replaces the old top-right TAX INVOICE details block and appears in Invoice Preview, PDF, Image Export, and Print.
+                  </p>
+                </div>
+                {formData.logoUrl && (
+                  <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-md border border-emerald-200 shrink-0">
+                    <CheckCircle2 className="w-3 h-3" />
+                    Logo Active
+                  </span>
+                )}
+              </div>
+
+              <div className="flex flex-col sm:flex-row items-center gap-5 pt-2">
+                {/* Logo Preview Box (Maintains aspect ratio, never distorted) */}
+                <div className="w-48 h-24 rounded-xl border-2 border-dashed border-slate-300 bg-white flex items-center justify-center p-2 relative overflow-hidden group shadow-2xs shrink-0">
+                  {formData.logoUrl ? (
+                    <img
+                      src={formData.logoUrl}
+                      alt="Company Logo Preview"
+                      className="max-h-full max-w-full object-contain"
+                    />
+                  ) : (
+                    <div className="text-center text-slate-400 p-2">
+                      <Upload className="w-6 h-6 mx-auto mb-1 text-slate-400" />
+                      <span className="text-[10px] font-semibold block">No Logo Uploaded</span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Upload & Action Controls */}
+                <div className="space-y-2">
+                  <input
+                    ref={logoInputRef}
+                    type="file"
+                    accept="image/png, image/jpeg, image/jpg, image/webp"
+                    onChange={handleLogoUpload}
+                    className="hidden"
+                  />
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => logoInputRef.current?.click()}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded-xl transition-all cursor-pointer shadow-xs active:scale-98"
+                    >
+                      <Upload className="w-3.5 h-3.5" />
+                      {formData.logoUrl ? 'Replace Logo' : 'Upload Logo'}
+                    </button>
+                    {formData.logoUrl && (
+                      <button
+                        type="button"
+                        onClick={handleRemoveLogo}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs font-bold rounded-xl transition-all cursor-pointer border border-rose-200 active:scale-98"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                        Remove Logo
+                      </button>
+                    )}
+                  </div>
+                  <p className="text-[11px] text-slate-400 leading-tight">
+                    Supported formats: <strong>PNG, JPG, JPEG, WEBP</strong> (Max 2MB).
+                    <br />
+                    Aspect ratio is preserved. If removed, the invoice header displays cleanly without broken images.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <h3 className="text-xs font-extrabold uppercase tracking-wider text-slate-400 pt-2 border-t border-slate-100">
               Statutory Company Identity
             </h3>
 
@@ -520,7 +644,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ initialTab = 'compan
                 </div>
 
                 {/* Description */}
-                <div className="flex items-start justify-between p-3.5 rounded-xl border border-slate-200 bg-slate-50/70 hover:bg-slate-50 transition-colors sm:col-span-2">
+                <div className="flex items-start justify-between p-3.5 rounded-xl border border-slate-200 bg-slate-50/70 hover:bg-slate-50 transition-colors">
                   <div className="pr-4">
                     <p className="text-xs font-bold text-slate-900">Item Description Field</p>
                     <p className="text-[11px] text-slate-500 mt-0.5">
@@ -532,6 +656,25 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ initialTab = 'compan
                       type="checkbox"
                       checked={invSettingsData.showDescription}
                       onChange={(e) => setInvSettingsData((prev) => ({ ...prev, showDescription: e.target.checked }))}
+                      className="sr-only peer"
+                    />
+                    <div className="w-9 h-5 bg-slate-300 peer-focus:outline-hidden rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-amber-500"></div>
+                  </label>
+                </div>
+
+                {/* Company Logo Display Toggle */}
+                <div className="flex items-start justify-between p-3.5 rounded-xl border border-slate-200 bg-slate-50/70 hover:bg-slate-50 transition-colors">
+                  <div className="pr-4">
+                    <p className="text-xs font-bold text-slate-900">Company Logo on Invoices</p>
+                    <p className="text-[11px] text-slate-500 mt-0.5">
+                      Display uploaded company logo in top-right invoice header
+                    </p>
+                  </div>
+                  <label className="relative inline-flex items-center cursor-pointer shrink-0">
+                    <input
+                      type="checkbox"
+                      checked={invSettingsData.showLogo !== false}
+                      onChange={(e) => setInvSettingsData((prev) => ({ ...prev, showLogo: e.target.checked }))}
                       className="sr-only peer"
                     />
                     <div className="w-9 h-5 bg-slate-300 peer-focus:outline-hidden rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-amber-500"></div>

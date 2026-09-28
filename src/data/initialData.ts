@@ -13,7 +13,7 @@ import { getCurrentFinancialYear } from '../utils/taxCalculator';
 
 export const DEFAULT_COMPANY_SETTINGS: CompanySettings = {
   companyName: 'Invoice Temple Technologies Pvt. Ltd.',
-  logoUrl: 'https://images.unsplash.com/photo-1572021335469-31706a17aaef?w=200&h=200&fit=crop&crop=faces&q=80',
+  logoUrl: '',
   address: 'Level 5, Temple Towers, 42 Anna Salai, Guindy Industrial Estate',
   city: 'Chennai',
   state: 'Tamil Nadu',
@@ -61,6 +61,8 @@ export const DEFAULT_INVOICE_SETTINGS: InvoiceSettings = {
   showTerms: true,
   showBankDetails: true,
   showSignature: true,
+  showDescription: true,
+  showLogo: true,
   updatedAt: new Date().toISOString(),
 };
 
