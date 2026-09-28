@@ -44,9 +44,7 @@ export const InvoiceDetailView: React.FC<InvoiceDetailViewProps> = ({
     showDiscount = true,
     showShipping = true,
     showGst = true,
-    showDescription = true,
     showDueDate = true,
-    showPoNumber = true,
     showNotes = true,
     showTerms = true,
     showBankDetails = true,
@@ -55,6 +53,7 @@ export const InvoiceDetailView: React.FC<InvoiceDetailViewProps> = ({
   } = invoiceSettings || {};
 
   const invoice = invoices.find((inv) => inv.id === invoiceId);
+  const effectiveCompany = invoice?.companySnapshot || companySettings;
 
   // Template switch state
   const [template, setTemplate] = useState<InvoiceTemplate>(
@@ -187,7 +186,7 @@ export const InvoiceDetailView: React.FC<InvoiceDetailViewProps> = ({
 
   // Inter-state check
   const isInterState =
-    (companySettings.state || '').trim().toLowerCase() !==
+    (effectiveCompany.state || '').trim().toLowerCase() !==
     (invoice.placeOfSupply || '').trim().toLowerCase();
 
   return (
@@ -386,26 +385,26 @@ export const InvoiceDetailView: React.FC<InvoiceDetailViewProps> = ({
                   </div>
                   <div>
                     <h1 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">
-                      {companySettings.companyName}
+                      {effectiveCompany.companyName}
                     </h1>
                   </div>
                 </div>
                 <p className="text-xs text-slate-600 mt-3 max-w-sm leading-relaxed">
-                  {companySettings.address}, {companySettings.city}, {companySettings.state} - {companySettings.pincode}
+                  {effectiveCompany.address}, {effectiveCompany.city}, {effectiveCompany.state} - {effectiveCompany.pincode}
                 </p>
                 <div className="text-xs text-slate-600 mt-1 flex flex-wrap gap-x-4">
-                  <span><strong>GSTIN:</strong> {companySettings.gstin}</span>
-                  {companySettings.pan && <span><strong>PAN:</strong> {companySettings.pan}</span>}
-                  <span><strong>Phone:</strong> {companySettings.phone}</span>
+                  <span><strong>GSTIN:</strong> {effectiveCompany.gstin}</span>
+                  {effectiveCompany.pan && <span><strong>PAN:</strong> {effectiveCompany.pan}</span>}
+                  <span><strong>Phone:</strong> {effectiveCompany.phone}</span>
                 </div>
               </div>
 
               {/* User-configured company logo (replaces top-right TAX INVOICE block) */}
-              {showLogo && companySettings.logoUrl ? (
+              {showLogo && effectiveCompany.logoUrl ? (
                 <div className="flex sm:justify-end items-center self-start shrink-0">
                   <img
-                    src={companySettings.logoUrl}
-                    alt={companySettings.companyName || 'Company Logo'}
+                    src={effectiveCompany.logoUrl}
+                    alt={effectiveCompany.companyName || 'Company Logo'}
                     className="max-h-24 max-w-[200px] sm:max-w-[240px] w-auto h-auto object-contain rounded-lg shadow-xs"
                   />
                 </div>
@@ -458,11 +457,6 @@ export const InvoiceDetailView: React.FC<InvoiceDetailViewProps> = ({
                       <strong className="text-slate-900">Delivery Note:</strong> {invoice.deliveryNote}
                     </p>
                   )}
-                  {showPoNumber && invoice.poNumber && (
-                    <p>
-                      <strong className="text-slate-900">PO No:</strong> {invoice.poNumber}
-                    </p>
-                  )}
                   {invoice.placeOfSupply && (
                     <p>
                       <strong className="text-slate-900">Place of Supply:</strong> {invoice.placeOfSupply}
@@ -478,7 +472,7 @@ export const InvoiceDetailView: React.FC<InvoiceDetailViewProps> = ({
                 <thead>
                   <tr className="border-b-2 border-slate-900 text-slate-900 font-bold uppercase tracking-wider text-[10px]">
                     <th className="py-2.5 pr-2 w-8">#</th>
-                    <th className="py-2.5 px-2">Description of Goods / Services</th>
+                    <th className="py-2.5 px-2">Item / Product / Service</th>
                     {showHsnSac && <th className="py-2.5 px-2 w-20">HSN/SAC</th>}
                     <th className="py-2.5 px-2 w-16 text-center">Qty</th>
                     <th className="py-2.5 px-2 w-20 text-right">Rate</th>
@@ -501,11 +495,6 @@ export const InvoiceDetailView: React.FC<InvoiceDetailViewProps> = ({
                       <td className="py-3 pr-2 text-slate-400 font-bold">{idx + 1}</td>
                       <td className="py-3 px-2">
                         <p className="font-bold text-slate-900">{item.name}</p>
-                        {showDescription && item.description && (
-                          <p className="text-[11px] text-slate-500 mt-0.5 whitespace-pre-line">
-                            {item.description}
-                          </p>
-                        )}
                       </td>
                       {showHsnSac && (
                         <td className="py-3 px-2 text-slate-600 font-mono text-[11px]">
@@ -570,14 +559,14 @@ export const InvoiceDetailView: React.FC<InvoiceDetailViewProps> = ({
                     <p className="text-[10px] font-bold uppercase text-amber-600 tracking-wider">
                       Company Bank Account for Electronic Settlement
                     </p>
-                    <p><strong>Bank:</strong> {companySettings.bankName}</p>
-                    <p><strong>Account Name:</strong> {companySettings.accountName}</p>
-                    <p className="font-mono"><strong>A/C No:</strong> {companySettings.accountNumber}</p>
-                    <p className="font-mono"><strong>IFSC Code:</strong> {companySettings.ifscCode}</p>
-                    <p><strong>Branch:</strong> {companySettings.branch}</p>
+                    <p><strong>Bank:</strong> {effectiveCompany.bankName}</p>
+                    <p><strong>Account Name:</strong> {effectiveCompany.accountName}</p>
+                    <p className="font-mono"><strong>A/C No:</strong> {effectiveCompany.accountNumber}</p>
+                    <p className="font-mono"><strong>IFSC Code:</strong> {effectiveCompany.ifscCode}</p>
+                    <p><strong>Branch:</strong> {effectiveCompany.branch}</p>
                   </div>
 
-                  {companySettings.upiId && (
+                  {effectiveCompany.upiId && (
                     <div className="text-center sm:text-right border-t sm:border-t-0 sm:border-l border-slate-200 pt-3 sm:pt-0 sm:pl-4">
                       <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">
                         Instant UPI Payment
@@ -588,7 +577,7 @@ export const InvoiceDetailView: React.FC<InvoiceDetailViewProps> = ({
                           <QrCode className="w-12 h-12" />
                         </div>
                       </div>
-                      <p className="text-[10px] font-mono text-slate-600 mt-1">{companySettings.upiId}</p>
+                      <p className="text-[10px] font-mono text-slate-600 mt-1">{effectiveCompany.upiId}</p>
                     </div>
                   )}
                 </div>
@@ -690,7 +679,7 @@ export const InvoiceDetailView: React.FC<InvoiceDetailViewProps> = ({
                   )}
                 </div>
                 <div className="border-t border-slate-400 pt-1">
-                  <p className="font-bold text-slate-900">{companySettings.authorizedPerson || companySettings.authorizedSignatory || invoice.createdByName || 'Authorized Signatory'}</p>
+                  <p className="font-bold text-slate-900">{effectiveCompany.authorizedPerson || effectiveCompany.authorizedSignatory || invoice.createdByName || 'Authorized Signatory'}</p>
                   <p className="text-[10px] text-slate-500 uppercase">Authorized Signatory</p>
                 </div>
               </div>
@@ -711,23 +700,23 @@ export const InvoiceDetailView: React.FC<InvoiceDetailViewProps> = ({
                     IT
                   </div>
                   <div>
-                    <h1 className="text-2xl font-black text-slate-900">{companySettings.companyName}</h1>
+                    <h1 className="text-2xl font-black text-slate-900">{effectiveCompany.companyName}</h1>
                   </div>
                 </div>
                 <p className="text-xs text-slate-500 mt-2 max-w-sm">
-                  {companySettings.address}, {companySettings.city}, {companySettings.state} - {companySettings.pincode}
+                  {effectiveCompany.address}, {effectiveCompany.city}, {effectiveCompany.state} - {effectiveCompany.pincode}
                 </p>
                 <p className="text-xs text-slate-600 mt-1">
-                  <strong>GSTIN:</strong> <span className="font-mono">{companySettings.gstin}</span>
+                  <strong>GSTIN:</strong> <span className="font-mono">{effectiveCompany.gstin}</span>
                 </p>
               </div>
 
               {/* Top-Right: User Company Logo */}
-              {showLogo && companySettings.logoUrl ? (
+              {showLogo && effectiveCompany.logoUrl ? (
                 <div className="flex sm:justify-end items-center self-start shrink-0">
                   <img
-                    src={companySettings.logoUrl}
-                    alt={companySettings.companyName || 'Company Logo'}
+                    src={effectiveCompany.logoUrl}
+                    alt={effectiveCompany.companyName || 'Company Logo'}
                     className="max-h-24 max-w-[200px] sm:max-w-[240px] w-auto h-auto object-contain rounded-lg shadow-xs"
                   />
                 </div>
@@ -764,7 +753,6 @@ export const InvoiceDetailView: React.FC<InvoiceDetailViewProps> = ({
                 <p><strong className="text-slate-900">Invoice Date:</strong> {formatInvoiceDate(invoice.invoiceDate)}</p>
                 {showDueDate && <p><strong className="text-slate-900">Due Date:</strong> {formatInvoiceDate(invoice.dueDate)}</p>}
                 {invoice.deliveryNote && <p><strong className="text-slate-900">Delivery Note:</strong> {invoice.deliveryNote}</p>}
-                {showPoNumber && invoice.poNumber && <p><strong className="text-slate-900">PO No:</strong> {invoice.poNumber}</p>}
                 {invoice.placeOfSupply && <p><strong className="text-slate-900">Place of Supply:</strong> {invoice.placeOfSupply}</p>}
               </div>
             </div>
@@ -775,7 +763,7 @@ export const InvoiceDetailView: React.FC<InvoiceDetailViewProps> = ({
                 <thead>
                   <tr className="bg-slate-900 text-white font-bold uppercase text-[10px]">
                     <th className="py-3 px-3 rounded-l-xl">#</th>
-                    <th className="py-3 px-3">Item Description</th>
+                    <th className="py-3 px-3">Item / Product / Service</th>
                     {showHsnSac && <th className="py-3 px-3">HSN</th>}
                     <th className="py-3 px-3 text-center">Qty</th>
                     <th className="py-3 px-3 text-right">Rate</th>
@@ -790,11 +778,6 @@ export const InvoiceDetailView: React.FC<InvoiceDetailViewProps> = ({
                       <td className="py-3 px-3 font-bold text-slate-400">{idx + 1}</td>
                       <td className="py-3 px-3 font-bold text-slate-900">
                         {item.name}
-                        {showDescription && item.description && (
-                          <p className="text-[11px] text-slate-500 font-normal mt-0.5 whitespace-pre-line">
-                            {item.description}
-                          </p>
-                        )}
                       </td>
                       {showHsnSac && <td className="py-3 px-3 font-mono text-slate-500">{item.hsnSacCode || '-'}</td>}
                       <td className="py-3 px-3 text-center font-semibold">{item.quantity} {showUnit ? item.unit : ''}</td>
@@ -815,8 +798,8 @@ export const InvoiceDetailView: React.FC<InvoiceDetailViewProps> = ({
               <div className="space-y-4">
                 <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100 text-xs space-y-1">
                   <p className="font-bold text-slate-800">Direct Bank Deposit / Wire</p>
-                  <p>{companySettings.bankName} &bull; A/C: {companySettings.accountNumber}</p>
-                  <p>IFSC: {companySettings.ifscCode} &bull; UPI: {companySettings.upiId}</p>
+                  <p>{effectiveCompany.bankName} &bull; A/C: {effectiveCompany.accountNumber}</p>
+                  <p>IFSC: {effectiveCompany.ifscCode} &bull; UPI: {effectiveCompany.upiId}</p>
                 </div>
                 <div className="text-xs text-slate-600 italic">
                   Amount in words: {numberToWordsIndian(invoice.grandTotal)}
@@ -893,7 +876,7 @@ export const InvoiceDetailView: React.FC<InvoiceDetailViewProps> = ({
                   )}
                 </div>
                 <div className="border-t border-slate-300 pt-1">
-                  <p className="font-bold text-slate-900">{companySettings.authorizedPerson || companySettings.authorizedSignatory || invoice.createdByName || 'Authorized Signatory'}</p>
+                  <p className="font-bold text-slate-900">{effectiveCompany.authorizedPerson || effectiveCompany.authorizedSignatory || invoice.createdByName || 'Authorized Signatory'}</p>
                   <p className="text-[10px] text-slate-500 uppercase">Authorized Signatory</p>
                 </div>
               </div>
@@ -909,15 +892,15 @@ export const InvoiceDetailView: React.FC<InvoiceDetailViewProps> = ({
             {/* Boxed GST Header */}
             <div className="border border-slate-900 p-3 grid grid-cols-2 gap-2 items-center">
               <div>
-                <h3 className="font-black text-sm uppercase">{companySettings.companyName}</h3>
-                <p>{companySettings.address}, {companySettings.city}, {companySettings.state}</p>
-                <p><strong>GSTIN:</strong> {companySettings.gstin} | <strong>PAN:</strong> {companySettings.pan}</p>
+                <h3 className="font-black text-sm uppercase">{effectiveCompany.companyName}</h3>
+                <p>{effectiveCompany.address}, {effectiveCompany.city}, {effectiveCompany.state}</p>
+                <p><strong>GSTIN:</strong> {effectiveCompany.gstin} | <strong>PAN:</strong> {effectiveCompany.pan}</p>
               </div>
               <div className="flex justify-end items-center">
-                {showLogo && companySettings.logoUrl ? (
+                {showLogo && effectiveCompany.logoUrl ? (
                   <img
-                    src={companySettings.logoUrl}
-                    alt={companySettings.companyName || 'Company Logo'}
+                    src={effectiveCompany.logoUrl}
+                    alt={effectiveCompany.companyName || 'Company Logo'}
                     className="max-h-16 max-w-[160px] object-contain"
                   />
                 ) : null}
@@ -938,7 +921,6 @@ export const InvoiceDetailView: React.FC<InvoiceDetailViewProps> = ({
                 <p><strong>Invoice Date:</strong> {formatInvoiceDate(invoice.invoiceDate)}</p>
                 {showDueDate && <p><strong>Due Date:</strong> {formatInvoiceDate(invoice.dueDate)}</p>}
                 {invoice.deliveryNote && <p><strong>Delivery Note:</strong> {invoice.deliveryNote}</p>}
-                {showPoNumber && invoice.poNumber && <p><strong>PO No:</strong> {invoice.poNumber}</p>}
                 {invoice.placeOfSupply && <p><strong>Place of Supply:</strong> {invoice.placeOfSupply}</p>}
               </div>
             </div>
@@ -948,7 +930,7 @@ export const InvoiceDetailView: React.FC<InvoiceDetailViewProps> = ({
               <thead>
                 <tr className="bg-slate-100 border-b border-slate-900 font-bold">
                   <th className="p-1.5 border-r border-slate-900">#</th>
-                  <th className="p-1.5 border-r border-slate-900">Description</th>
+                  <th className="p-1.5 border-r border-slate-900">Item / Product / Service</th>
                   {showHsnSac && <th className="p-1.5 border-r border-slate-900">HSN</th>}
                   <th className="p-1.5 border-r border-slate-900 text-center">Qty</th>
                   <th className="p-1.5 border-r border-slate-900 text-right">Rate</th>
@@ -963,9 +945,6 @@ export const InvoiceDetailView: React.FC<InvoiceDetailViewProps> = ({
                     <td className="p-1.5 border-r border-slate-900">{idx + 1}</td>
                     <td className="p-1.5 border-r border-slate-900 font-medium">
                       {item.name}
-                      {showDescription && item.description && (
-                        <p className="text-[10px] text-slate-500">{item.description}</p>
-                      )}
                     </td>
                     {showHsnSac && <td className="p-1.5 border-r border-slate-900">{item.hsnSacCode}</td>}
                     <td className="p-1.5 border-r border-slate-900 text-center">{item.quantity} {showUnit ? item.unit : ''}</td>
@@ -981,8 +960,8 @@ export const InvoiceDetailView: React.FC<InvoiceDetailViewProps> = ({
             {/* Compact Bottom Summary */}
             <div className="border border-slate-900 p-3 grid grid-cols-2 gap-4">
               <div>
-                <p><strong>Bank:</strong> {companySettings.bankName} | A/C: {companySettings.accountNumber}</p>
-                <p><strong>IFSC:</strong> {companySettings.ifscCode}</p>
+                <p><strong>Bank:</strong> {effectiveCompany.bankName} | A/C: {effectiveCompany.accountNumber}</p>
+                <p><strong>IFSC:</strong> {effectiveCompany.ifscCode}</p>
                 <p className="mt-2 text-[10px] italic">Amount in words: {numberToWordsIndian(invoice.grandTotal)}</p>
               </div>
               <div className="text-right space-y-1">
@@ -1028,7 +1007,7 @@ export const InvoiceDetailView: React.FC<InvoiceDetailViewProps> = ({
                     <span className="text-[10px] italic text-slate-400">Digitally Verified</span>
                   )}
                 </div>
-                <p className="font-bold border-t border-slate-900 pt-0.5">For {companySettings.companyName}</p>
+                <p className="font-bold border-t border-slate-900 pt-0.5">For {effectiveCompany.companyName}</p>
                 <p className="text-[10px] text-slate-500 uppercase">Authorized Signatory</p>
               </div>
             </div>

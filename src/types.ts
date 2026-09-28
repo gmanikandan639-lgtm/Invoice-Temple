@@ -16,6 +16,7 @@ export type UserProfile = {
   status: UserStatus;
   photoURL?: string;
   profilePhoto?: string;
+  companySettings?: CompanySettings;
   createdAt: string;
   updatedAt?: string;
   lastLogin?: string;
@@ -115,13 +116,14 @@ export interface Invoice {
   invoiceDate: string;
   dueDate: string;
   paymentTerms: string;
-  poNumber?: string;
   referenceNumber?: string;
   deliveryNote?: string;
   placeOfSupply: string;
   salesperson?: string;
   customerId: string;
   customerSnapshot: Customer;
+  companySnapshot?: CompanySettings;
+  userId?: string;
   items: InvoiceItem[];
   subtotal: number;
   discount: number;
@@ -270,12 +272,10 @@ export interface InvoiceSettings {
   showIgst?: boolean; // Sub-control for IGST
   showPaymentMode?: boolean; // Default true (Show)
   showDueDate?: boolean; // Default true (Show)
-  showPoNumber?: boolean; // Default true (Show)
   showNotes?: boolean; // Default true (Show)
   showTerms?: boolean; // Default true (Show)
   showBankDetails?: boolean; // Default true (Show)
   showSignature?: boolean; // Default true (Show)
-  showDescription?: boolean; // Default true (Show)
   showLogo?: boolean; // Default true (Show)
 
   updatedAt: string;

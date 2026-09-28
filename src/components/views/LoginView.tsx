@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Lock, Mail, Eye, EyeOff, AlertCircle, ArrowRight } from 'lucide-react';
+import { Lock, Mail, Eye, EyeOff, AlertCircle, ArrowRight, User, Phone, CheckCircle2 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { Modal } from '../common/Modal';
 
@@ -9,15 +9,29 @@ interface LoginViewProps {
 }
 
 export const LoginView: React.FC<LoginViewProps> = ({ onNavigate, onLoginSuccess }) => {
-  const { login, signInWithGoogle, resetPassword } = useAuth();
+  const { login, register, signInWithGoogle, resetPassword } = useAuth();
 
+  const [mode, setMode] = useState<'login' | 'register'>('login');
+
+  // Login form state
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(true);
+
+  // Register form state
+  const [regName, setRegName] = useState('');
+  const [regMobile, setRegMobile] = useState('');
+  const [regEmail, setRegEmail] = useState('');
+  const [regPassword, setRegPassword] = useState('');
+  const [regConfirmPassword, setRegConfirmPassword] = useState('');
+  const [showRegPassword, setShowRegPassword] = useState(false);
+  const [showRegConfirmPassword, setShowRegConfirmPassword] = useState(false);
+
   const [isLoading, setIsLoading] = useState(false);
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
+  const [successMessage, setSuccessMessage] = useState('');
 
   // Forgot password modal
   const [forgotModalOpen, setForgotModalOpen] = useState(false);
@@ -31,6 +45,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onNavigate, onLoginSuccess
 
   const handleGoogleSignIn = async () => {
     setErrorMessage('');
+    setSuccessMessage('');
     setIsGoogleLoading(true);
     const res = await signInWithGoogle();
     setIsGoogleLoading(false);
@@ -45,6 +60,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onNavigate, onLoginSuccess
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage('');
+    setSuccessMessage('');
     if (!email.trim() || !password) {
       setErrorMessage('Please enter both Work Email Address and Password.');
       return;
@@ -55,10 +71,66 @@ export const LoginView: React.FC<LoginViewProps> = ({ onNavigate, onLoginSuccess
     setIsLoading(false);
 
     if (res.success) {
-      const isAdm = email.toLowerCase().includes('admin') || email.toLowerCase() === 'gmanikandan639@gmail.com';
+      const isAdm =
+        email.toLowerCase().includes('admin') ||
+        email.toLowerCase() === 'gmanikandan639@gmail.com';
       handleSuccess(isAdm ? '/admin' : '/user');
     } else {
       setErrorMessage(res.error || 'Invalid credentials or account disabled.');
+    }
+  };
+
+  const handleRegister = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setErrorMessage('');
+    setSuccessMessage('');
+
+    if (!regName.trim()) {
+      setErrorMessage('Full Name is required.');
+      return;
+    }
+    if (!regMobile.trim()) {
+      setErrorMessage('Mobile Number is required.');
+      return;
+    }
+    if (!regEmail.trim()) {
+      setErrorMessage('Email Address is required.');
+      return;
+    }
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(regEmail.trim())) {
+      setErrorMessage('Please enter a valid email address.');
+      return;
+    }
+    if (!regPassword) {
+      setErrorMessage('Password is required.');
+      return;
+    }
+    if (regPassword.length < 6) {
+      setErrorMessage('Password must be at least 6 characters.');
+      return;
+    }
+    if (regPassword !== regConfirmPassword) {
+      setErrorMessage('Passwords do not match. Please verify.');
+      return;
+    }
+
+    setIsLoading(true);
+    const res = await register({
+      name: regName.trim(),
+      mobile: regMobile.trim(),
+      email: regEmail.trim(),
+      password: regPassword,
+    });
+    setIsLoading(false);
+
+    if (res.success) {
+      setSuccessMessage('Account created successfully! Redirecting...');
+      setTimeout(() => {
+        handleSuccess('/user');
+      }, 300);
+    } else {
+      setErrorMessage(res.error || 'Failed to create account. Please try again.');
     }
   };
 
@@ -70,7 +142,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onNavigate, onLoginSuccess
   };
 
   return (
-    <div className="min-h-screen bg-slate-900 flex flex-col justify-center py-12 sm:px-6 lg:px-8 relative overflow-hidden">
+    <div className="min-h-screen bg-slate-900 flex flex-col justify-center py-10 sm:px-6 lg:px-8 relative overflow-hidden">
       {/* Background Decorative Gradients */}
       <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-7xl h-96 bg-gradient-to-b from-amber-500/10 via-transparent to-transparent pointer-events-none" />
       <div className="absolute -top-32 -left-32 w-80 h-80 rounded-full bg-amber-500/10 blur-3xl pointer-events-none" />
@@ -83,113 +155,286 @@ export const LoginView: React.FC<LoginViewProps> = ({ onNavigate, onLoginSuccess
             IT
           </div>
         </div>
-        <h2 className="mt-4 text-center text-2xl sm:text-3xl font-extrabold text-white tracking-tight">
+        <h2 className="mt-3 text-center text-2xl sm:text-3xl font-extrabold text-white tracking-tight">
           INVOICE TEMPLE
         </h2>
-        <p className="mt-1 text-center text-xs sm:text-sm text-amber-400/90 font-medium">
+        <p className="mt-0.5 text-center text-xs sm:text-sm text-amber-400/90 font-medium">
           Smart Billing &amp; Invoice Management System
         </p>
+
+        {/* Tab switch between Sign In and Create Account */}
+        <div className="mt-6 flex bg-slate-800/90 p-1 rounded-2xl border border-slate-700/80 shadow-md max-w-xs mx-auto">
+          <button
+            type="button"
+            onClick={() => {
+              setMode('login');
+              setErrorMessage('');
+              setSuccessMessage('');
+            }}
+            className={`flex-1 py-1.5 text-xs font-bold rounded-xl transition-all cursor-pointer ${
+              mode === 'login'
+                ? 'bg-amber-500 text-slate-950 shadow-xs'
+                : 'text-slate-400 hover:text-white'
+            }`}
+          >
+            Sign In
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setMode('register');
+              setErrorMessage('');
+              setSuccessMessage('');
+            }}
+            className={`flex-1 py-1.5 text-xs font-bold rounded-xl transition-all cursor-pointer ${
+              mode === 'register'
+                ? 'bg-amber-500 text-slate-950 shadow-xs'
+                : 'text-slate-400 hover:text-white'
+            }`}
+          >
+            Create Account
+          </button>
+        </div>
       </div>
 
-      <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md relative z-10 px-4 sm:px-0">
-        <div className="bg-slate-800/90 border border-slate-700/80 backdrop-blur-md py-8 px-6 sm:px-10 shadow-2xl rounded-3xl">
+      <div className="mt-5 sm:mx-auto sm:w-full sm:max-w-md relative z-10 px-4 sm:px-0">
+        <div className="bg-slate-800/90 border border-slate-700/80 backdrop-blur-md py-7 px-6 sm:px-10 shadow-2xl rounded-3xl">
           {errorMessage && (
-            <div className="mb-5 p-3 rounded-xl bg-rose-500/15 border border-rose-500/30 text-rose-300 text-xs flex items-center gap-2">
+            <div className="mb-4 p-3 rounded-xl bg-rose-500/15 border border-rose-500/30 text-rose-300 text-xs flex items-center gap-2">
               <AlertCircle className="w-4 h-4 shrink-0" />
               <span>{errorMessage}</span>
             </div>
           )}
 
-          {/* Standard Email / Password Form */}
-          <form className="space-y-4" onSubmit={handleLogin}>
-            <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1.5">
-                Work Email Address
-              </label>
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
-                  <Mail className="w-4 h-4" />
-                </div>
-                <input
-                  id="login-email-input"
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  required
-                  placeholder="work.email@company.com"
-                  className="w-full pl-9 pr-3 py-2.5 bg-slate-900/80 border border-slate-700 rounded-xl text-white text-sm focus:outline-hidden focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition-all placeholder:text-slate-500"
-                />
-              </div>
+          {successMessage && (
+            <div className="mb-4 p-3 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 text-xs flex items-center gap-2">
+              <CheckCircle2 className="w-4 h-4 shrink-0" />
+              <span>{successMessage}</span>
             </div>
+          )}
 
-            <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1.5">
-                Password
-              </label>
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
-                  <Lock className="w-4 h-4" />
+          {/* ================= MODE: LOGIN ================= */}
+          {mode === 'login' && (
+            <form className="space-y-4" onSubmit={handleLogin}>
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                  Email
+                </label>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+                    <Mail className="w-4 h-4" />
+                  </div>
+                  <input
+                    id="login-email-input"
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    required
+                    placeholder="name@company.com"
+                    className="w-full pl-9 pr-3 py-2.5 bg-slate-900/80 border border-slate-700 rounded-xl text-white text-sm focus:outline-hidden focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition-all placeholder:text-slate-500"
+                  />
                 </div>
-                <input
-                  id="login-password-input"
-                  type={showPassword ? 'text' : 'password'}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  required
-                  placeholder="••••••••"
-                  className="w-full pl-9 pr-10 py-2.5 bg-slate-900/80 border border-slate-700 rounded-xl text-white text-sm focus:outline-hidden focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition-all placeholder:text-slate-500"
-                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                  Password
+                </label>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+                    <Lock className="w-4 h-4" />
+                  </div>
+                  <input
+                    id="login-password-input"
+                    type={showPassword ? 'text' : 'password'}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    required
+                    placeholder="••••••••"
+                    className="w-full pl-9 pr-10 py-2.5 bg-slate-900/80 border border-slate-700 rounded-xl text-white text-sm focus:outline-hidden focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition-all placeholder:text-slate-500"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-200 cursor-pointer"
+                    aria-label={showPassword ? 'Hide password' : 'Show password'}
+                  >
+                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between text-xs pt-1">
+                <label className="flex items-center gap-2 cursor-pointer text-slate-400 hover:text-slate-300">
+                  <input
+                    type="checkbox"
+                    checked={rememberMe}
+                    onChange={(e) => setRememberMe(e.target.checked)}
+                    className="rounded-sm border-slate-600 bg-slate-900 text-amber-500 focus:ring-amber-500"
+                  />
+                  <span>Remember session</span>
+                </label>
+
                 <button
                   type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-200 cursor-pointer"
-                  aria-label={showPassword ? 'Hide password' : 'Show password'}
+                  onClick={() => {
+                    setForgotEmail(email);
+                    setForgotModalOpen(true);
+                    setForgotStatus({});
+                  }}
+                  className="text-amber-400 hover:text-amber-300 font-medium transition-colors cursor-pointer"
                 >
-                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  Forgot Password?
                 </button>
               </div>
-            </div>
-
-            <div className="flex items-center justify-between text-xs pt-1">
-              <label className="flex items-center gap-2 cursor-pointer text-slate-400 hover:text-slate-300">
-                <input
-                  type="checkbox"
-                  checked={rememberMe}
-                  onChange={(e) => setRememberMe(e.target.checked)}
-                  className="rounded-sm border-slate-600 bg-slate-900 text-amber-500 focus:ring-amber-500"
-                />
-                <span>Remember session</span>
-              </label>
 
               <button
-                type="button"
-                onClick={() => {
-                  setForgotEmail(email);
-                  setForgotModalOpen(true);
-                  setForgotStatus({});
-                }}
-                className="text-amber-400 hover:text-amber-300 font-medium transition-colors cursor-pointer"
+                id="login-submit-btn"
+                type="submit"
+                disabled={isLoading}
+                className="w-full mt-2 flex items-center justify-center gap-2 py-3 px-4 rounded-xl bg-gradient-to-r from-amber-500 to-amber-400 hover:from-amber-400 hover:to-amber-300 text-slate-950 font-bold text-sm transition-all shadow-md active:scale-98 disabled:opacity-50 cursor-pointer"
               >
-                Forgot password?
+                {isLoading ? (
+                  <span>Signing in...</span>
+                ) : (
+                  <>
+                    <span>Login</span>
+                    <ArrowRight className="w-4 h-4" />
+                  </>
+                )}
               </button>
-            </div>
+            </form>
+          )}
 
-            <button
-              id="login-submit-btn"
-              type="submit"
-              disabled={isLoading}
-              className="w-full mt-2 flex items-center justify-center gap-2 py-3 px-4 rounded-xl bg-gradient-to-r from-amber-500 to-amber-400 hover:from-amber-400 hover:to-amber-300 text-slate-950 font-bold text-sm transition-all shadow-md active:scale-98 disabled:opacity-50 cursor-pointer"
-            >
-              {isLoading ? (
-                <span>Signing in...</span>
-              ) : (
-                <>
-                  <span>Sign In</span>
-                  <ArrowRight className="w-4 h-4" />
-                </>
-              )}
-            </button>
-          </form>
+          {/* ================= MODE: REGISTER ================= */}
+          {mode === 'register' && (
+            <form className="space-y-3.5" onSubmit={handleRegister}>
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1">
+                  Name *
+                </label>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+                    <User className="w-4 h-4" />
+                  </div>
+                  <input
+                    type="text"
+                    value={regName}
+                    onChange={(e) => setRegName(e.target.value)}
+                    required
+                    placeholder="Your Full Name"
+                    className="w-full pl-9 pr-3 py-2 bg-slate-900/80 border border-slate-700 rounded-xl text-white text-xs sm:text-sm focus:ring-2 focus:ring-amber-500 placeholder:text-slate-500"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1">
+                  Mobile Number *
+                </label>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+                    <Phone className="w-4 h-4" />
+                  </div>
+                  <input
+                    type="tel"
+                    value={regMobile}
+                    onChange={(e) => setRegMobile(e.target.value)}
+                    required
+                    placeholder="+91 98765 43210"
+                    className="w-full pl-9 pr-3 py-2 bg-slate-900/80 border border-slate-700 rounded-xl text-white text-xs sm:text-sm focus:ring-2 focus:ring-amber-500 placeholder:text-slate-500"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1">
+                  Email *
+                </label>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+                    <Mail className="w-4 h-4" />
+                  </div>
+                  <input
+                    type="email"
+                    value={regEmail}
+                    onChange={(e) => setRegEmail(e.target.value)}
+                    required
+                    placeholder="work.email@company.com"
+                    className="w-full pl-9 pr-3 py-2 bg-slate-900/80 border border-slate-700 rounded-xl text-white text-xs sm:text-sm focus:ring-2 focus:ring-amber-500 placeholder:text-slate-500"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1">
+                  Password *
+                </label>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+                    <Lock className="w-4 h-4" />
+                  </div>
+                  <input
+                    type={showRegPassword ? 'text' : 'password'}
+                    value={regPassword}
+                    onChange={(e) => setRegPassword(e.target.value)}
+                    required
+                    minLength={6}
+                    placeholder="Min 6 characters"
+                    className="w-full pl-9 pr-10 py-2 bg-slate-900/80 border border-slate-700 rounded-xl text-white text-xs sm:text-sm focus:ring-2 focus:ring-amber-500 placeholder:text-slate-500"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowRegPassword(!showRegPassword)}
+                    className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-200 cursor-pointer"
+                  >
+                    {showRegPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1">
+                  Confirm Password *
+                </label>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+                    <Lock className="w-4 h-4" />
+                  </div>
+                  <input
+                    type={showRegConfirmPassword ? 'text' : 'password'}
+                    value={regConfirmPassword}
+                    onChange={(e) => setRegConfirmPassword(e.target.value)}
+                    required
+                    placeholder="Re-enter password"
+                    className="w-full pl-9 pr-10 py-2 bg-slate-900/80 border border-slate-700 rounded-xl text-white text-xs sm:text-sm focus:ring-2 focus:ring-amber-500 placeholder:text-slate-500"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowRegConfirmPassword(!showRegConfirmPassword)}
+                    className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-200 cursor-pointer"
+                  >
+                    {showRegConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                disabled={isLoading}
+                className="w-full mt-2 flex items-center justify-center gap-2 py-3 px-4 rounded-xl bg-gradient-to-r from-amber-500 to-amber-400 hover:from-amber-400 hover:to-amber-300 text-slate-950 font-bold text-sm transition-all shadow-md active:scale-98 disabled:opacity-50 cursor-pointer"
+              >
+                {isLoading ? (
+                  <span>Creating Account...</span>
+                ) : (
+                  <>
+                    <span>Create Account</span>
+                    <ArrowRight className="w-4 h-4" />
+                  </>
+                )}
+              </button>
+            </form>
+          )}
 
           {/* Social / Alternative Divider */}
           <div className="relative flex py-4 items-center">
@@ -200,8 +445,8 @@ export const LoginView: React.FC<LoginViewProps> = ({ onNavigate, onLoginSuccess
             <div className="grow border-t border-slate-700"></div>
           </div>
 
-          {/* Google Sign In Options */}
-          <div className="space-y-2.5">
+          {/* Continue with Google */}
+          <div>
             <button
               id="google-signin-btn"
               type="button"
@@ -234,6 +479,41 @@ export const LoginView: React.FC<LoginViewProps> = ({ onNavigate, onLoginSuccess
               <span>Continue with Google</span>
             </button>
           </div>
+
+          {/* Toggle between Login and Register at bottom */}
+          <div className="mt-4 text-center text-xs text-slate-400">
+            {mode === 'login' ? (
+              <p>
+                Don&apos;t have an account?{' '}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMode('register');
+                    setErrorMessage('');
+                    setSuccessMessage('');
+                  }}
+                  className="text-amber-400 hover:text-amber-300 font-bold transition-colors cursor-pointer"
+                >
+                  Create Account
+                </button>
+              </p>
+            ) : (
+              <p>
+                Already have an account?{' '}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMode('login');
+                    setErrorMessage('');
+                    setSuccessMessage('');
+                  }}
+                  className="text-amber-400 hover:text-amber-300 font-bold transition-colors cursor-pointer"
+                >
+                  Sign In
+                </button>
+              </p>
+            )}
+          </div>
         </div>
       </div>
 
@@ -245,7 +525,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onNavigate, onLoginSuccess
       >
         <form onSubmit={handleForgotPasswordSubmit} className="space-y-4">
           <p className="text-xs text-slate-600">
-            Enter your registered email address and we'll send you instructions to securely reset your password.
+            Enter your registered email address and we&apos;ll send you instructions to securely reset your password.
           </p>
 
           {forgotStatus.message && (
@@ -270,7 +550,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onNavigate, onLoginSuccess
               onChange={(e) => setForgotEmail(e.target.value)}
               required
               className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-amber-500 focus:outline-hidden"
-              placeholder="user@invoicetemple.com"
+              placeholder="user@company.com"
             />
           </div>
 

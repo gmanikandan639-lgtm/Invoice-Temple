@@ -85,7 +85,6 @@ export const InvoiceCreateView: React.FC<InvoiceCreateViewProps> = ({
     return d.toISOString().split('T')[0];
   });
   const [deliveryNote, setDeliveryNote] = useState('');
-  const [poNumber, setPoNumber] = useState('');
   const [referenceNumber, setReferenceNumber] = useState('');
   const [placeOfSupply, setPlaceOfSupply] = useState(companySettings.state || 'Tamil Nadu');
   const [salesperson, setSalesperson] = useState(currentUser?.name || 'Admin');
@@ -162,7 +161,6 @@ export const InvoiceCreateView: React.FC<InvoiceCreateViewProps> = ({
       setDueDate(existingInvoice.dueDate);
       setDeliveryNote(existingInvoice.deliveryNote || '');
       setPaymentTerms(existingInvoice.paymentTerms || 'Due on Receipt');
-      setPoNumber(existingInvoice.poNumber || '');
       setReferenceNumber(existingInvoice.referenceNumber || '');
       setPlaceOfSupply(existingInvoice.placeOfSupply || companySettings.state || 'Tamil Nadu');
       setSalesperson(existingInvoice.salesperson || currentUser?.name || 'Admin');
@@ -401,12 +399,12 @@ export const InvoiceCreateView: React.FC<InvoiceCreateViewProps> = ({
         dueDate,
         deliveryNote,
         paymentTerms,
-        poNumber,
         referenceNumber,
         placeOfSupply: placeOfSupply || companySettings.state || 'Tamil Nadu',
         salesperson,
         customerId: custId,
         customerSnapshot: customerToUse,
+        companySnapshot: companySettings,
         items: draftItems,
         subtotal: totals.subtotal,
         discount: totals.discount,
@@ -476,12 +474,12 @@ export const InvoiceCreateView: React.FC<InvoiceCreateViewProps> = ({
           dueDate,
           deliveryNote,
           paymentTerms,
-          poNumber,
           referenceNumber,
           placeOfSupply,
           salesperson,
           customerId: selectedCustomer.id,
           customerSnapshot: selectedCustomer,
+          companySnapshot: companySettings,
           items,
           subtotal: totals.subtotal,
           discount: totals.discount,
@@ -528,12 +526,12 @@ export const InvoiceCreateView: React.FC<InvoiceCreateViewProps> = ({
           dueDate,
           deliveryNote,
           paymentTerms,
-          poNumber,
           referenceNumber,
           placeOfSupply,
           salesperson,
           customerId: selectedCustomer.id,
           customerSnapshot: selectedCustomer, // Immutable snapshot!
+          companySnapshot: companySettings,
           items,
           subtotal: totals.subtotal,
           discount: totals.discount,
@@ -787,19 +785,6 @@ export const InvoiceCreateView: React.FC<InvoiceCreateViewProps> = ({
                 className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs text-slate-900 focus:ring-2 focus:ring-amber-500"
               />
             </div>
-
-            <div>
-              <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1">
-                PO Number (Optional)
-              </label>
-              <input
-                type="text"
-                value={poNumber}
-                onChange={(e) => setPoNumber(e.target.value)}
-                placeholder="e.g. PO-8921"
-                className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs text-slate-900 focus:ring-2 focus:ring-amber-500"
-              />
-            </div>
           </div>
         </div>
 
@@ -894,7 +879,7 @@ export const InvoiceCreateView: React.FC<InvoiceCreateViewProps> = ({
               <thead className="bg-slate-50 text-slate-600 font-bold border-b border-slate-200 uppercase tracking-wider text-[10px]">
                 <tr>
                   <th className="px-3 py-2.5 w-10">#</th>
-                  <th className="px-3 py-2.5 min-w-[260px]">Item / Product Detail</th>
+                  <th className="px-3 py-2.5 min-w-[260px]">Item / Product / Service</th>
                   <th className="px-3 py-2.5 w-24">Qty</th>
                   <th className="px-3 py-2.5 w-32">Rate (₹)</th>
                   <th className="px-3 py-2.5 w-32 text-right">Total (₹)</th>
@@ -905,22 +890,14 @@ export const InvoiceCreateView: React.FC<InvoiceCreateViewProps> = ({
                 {items.map((item, idx) => (
                   <tr key={item.id} className="align-top hover:bg-slate-50/50">
                     <td className="px-3 py-2.5 text-slate-400 font-bold">{idx + 1}</td>
-                    <td className="px-3 py-2.5 space-y-1.5">
+                    <td className="px-3 py-2.5">
                       <input
                         type="text"
                         value={item.name}
                         onChange={(e) => updateItemRow(idx, { name: e.target.value })}
                         required
-                        placeholder="Item / Product Name *"
+                        placeholder="Item / Product / Service Name *"
                         className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg text-xs font-semibold focus:ring-1 focus:ring-amber-500"
-                      />
-
-                      <textarea
-                        rows={1}
-                        value={item.description || ''}
-                        onChange={(e) => updateItemRow(idx, { description: e.target.value })}
-                        placeholder="Optional description / details"
-                        className="w-full px-2.5 py-1 border border-slate-200 rounded-lg text-[11px] text-slate-600 focus:ring-1 focus:ring-amber-500"
                       />
                     </td>
 
@@ -1429,7 +1406,6 @@ export const InvoiceCreateView: React.FC<InvoiceCreateViewProps> = ({
                   <p><strong className="text-slate-900">Invoice Date:</strong> {formatInvoiceDate(invoiceDate)}</p>
                   <p><strong className="text-slate-900">Due Date:</strong> {formatInvoiceDate(dueDate)}</p>
                   <p><strong className="text-slate-900">Delivery Note:</strong> {deliveryNote || '-'}</p>
-                  {poNumber && <p><strong className="text-slate-900">PO No:</strong> {poNumber}</p>}
                   <p><strong className="text-slate-900">Place of Supply:</strong> {placeOfSupply}</p>
                 </div>
               </div>
@@ -1441,7 +1417,7 @@ export const InvoiceCreateView: React.FC<InvoiceCreateViewProps> = ({
                 <thead>
                   <tr className="border-b-2 border-slate-900 font-bold text-slate-900 uppercase text-[10px]">
                     <th className="py-2 pr-2 w-8">#</th>
-                    <th className="py-2 px-2">Item / Description</th>
+                    <th className="py-2 px-2">Item / Product / Service</th>
                     <th className="py-2 px-2 text-center w-16">Qty</th>
                     <th className="py-2 px-2 text-right w-20">Rate</th>
                     <th className="py-2 pl-2 text-right w-24">Total</th>
@@ -1453,9 +1429,6 @@ export const InvoiceCreateView: React.FC<InvoiceCreateViewProps> = ({
                       <td className="py-2.5 pr-2 text-slate-400 font-bold">{idx + 1}</td>
                       <td className="py-2.5 px-2">
                         <p className="font-bold text-slate-900">{item.name || 'Untitled Item'}</p>
-                        {item.description && (
-                          <p className="text-[11px] text-slate-500 whitespace-pre-line">{item.description}</p>
-                        )}
                       </td>
                       <td className="py-2.5 px-2 text-center font-semibold text-slate-800">
                         {item.quantity} {item.unit}

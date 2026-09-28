@@ -43,7 +43,6 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ initialTab = 'compan
     showDiscount: invoiceSettings?.showDiscount !== false,
     showShipping: invoiceSettings?.showShipping !== false,
     showGst: invoiceSettings?.showGst !== false,
-    showDescription: invoiceSettings?.showDescription !== false,
     showLogo: invoiceSettings?.showLogo !== false,
     defaultNotes: invoiceSettings?.defaultNotes || '',
     defaultTerms: invoiceSettings?.defaultTerms || '',
@@ -62,7 +61,6 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ initialTab = 'compan
         showDiscount: invoiceSettings.showDiscount !== false,
         showShipping: invoiceSettings.showShipping !== false,
         showGst: invoiceSettings.showGst !== false,
-        showDescription: invoiceSettings.showDescription !== false,
         showLogo: invoiceSettings.showLogo !== false,
         defaultNotes: invoiceSettings.defaultNotes || '',
         defaultTerms: invoiceSettings.defaultTerms || '',
@@ -77,12 +75,15 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ initialTab = 'compan
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // Check file format: PNG, JPG, JPEG, WEBP
+    // Check file format: PNG, JPG, JPEG, WEBP (case-insensitive extension and MIME validation)
     const validExtensions = ['.png', '.jpg', '.jpeg', '.webp'];
     const validMimes = ['image/png', 'image/jpeg', 'image/jpg', 'image/webp'];
-    const fileName = file.name.toLowerCase();
+    const fileName = (file.name || '').trim().toLowerCase();
+    const mimeType = (file.type || '').trim().toLowerCase();
     const hasValidExt = validExtensions.some((ext) => fileName.endsWith(ext));
-    if (!validMimes.includes(file.type) && !hasValidExt) {
+    const hasValidMime = validMimes.includes(mimeType);
+
+    if (!hasValidMime && !hasValidExt) {
       showToast('Supported formats: PNG, JPG, JPEG, WEBP', 'error');
       return;
     }
@@ -94,26 +95,36 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ initialTab = 'compan
     }
 
     const reader = new FileReader();
-    reader.onload = (event) => {
+    reader.onload = async (event) => {
       const dataUrl = event.target?.result as string;
       if (dataUrl) {
         setFormData((prev) => ({
           ...prev,
           logoUrl: dataUrl,
         }));
-        showToast('Company logo updated! Click "Save Changes" to apply.');
+        try {
+          await updateCompanySettings({ ...companySettings, ...formData, logoUrl: dataUrl });
+          showToast('Company logo updated and saved to your company profile!');
+        } catch {
+          showToast('Company logo preview updated! Click "Save Changes" to finalize.');
+        }
       }
     };
     reader.readAsDataURL(file);
     e.target.value = '';
   };
 
-  const handleRemoveLogo = () => {
+  const handleRemoveLogo = async () => {
     setFormData((prev) => ({
       ...prev,
       logoUrl: '',
     }));
-    showToast('Company logo removed. Header will render clean without logo.');
+    try {
+      await updateCompanySettings({ ...companySettings, ...formData, logoUrl: '' });
+      showToast('Company logo removed from your company profile.');
+    } catch {
+      showToast('Company logo removed.');
+    }
   };
 
   const handleTextChange = (field: keyof CompanySettings, value: any) => {
@@ -637,25 +648,6 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ initialTab = 'compan
                       type="checkbox"
                       checked={invSettingsData.showGst}
                       onChange={(e) => setInvSettingsData((prev) => ({ ...prev, showGst: e.target.checked }))}
-                      className="sr-only peer"
-                    />
-                    <div className="w-9 h-5 bg-slate-300 peer-focus:outline-hidden rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-amber-500"></div>
-                  </label>
-                </div>
-
-                {/* Description */}
-                <div className="flex items-start justify-between p-3.5 rounded-xl border border-slate-200 bg-slate-50/70 hover:bg-slate-50 transition-colors">
-                  <div className="pr-4">
-                    <p className="text-xs font-bold text-slate-900">Item Description Field</p>
-                    <p className="text-[11px] text-slate-500 mt-0.5">
-                      Include multiline description under item name
-                    </p>
-                  </div>
-                  <label className="relative inline-flex items-center cursor-pointer shrink-0">
-                    <input
-                      type="checkbox"
-                      checked={invSettingsData.showDescription}
-                      onChange={(e) => setInvSettingsData((prev) => ({ ...prev, showDescription: e.target.checked }))}
                       className="sr-only peer"
                     />
                     <div className="w-9 h-5 bg-slate-300 peer-focus:outline-hidden rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-amber-500"></div>

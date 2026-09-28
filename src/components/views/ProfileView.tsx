@@ -130,6 +130,19 @@ export const ProfileView: React.FC = () => {
     const file = e.target.files?.[0];
     if (!file) return;
 
+    // Check file format: PNG, JPG, JPEG, WEBP (case-insensitive extension and MIME validation)
+    const validExtensions = ['.png', '.jpg', '.jpeg', '.webp'];
+    const validMimes = ['image/png', 'image/jpeg', 'image/jpg', 'image/webp'];
+    const fileName = (file.name || '').trim().toLowerCase();
+    const mimeType = (file.type || '').trim().toLowerCase();
+    const hasValidExt = validExtensions.some((ext) => fileName.endsWith(ext));
+    const hasValidMime = validMimes.includes(mimeType);
+
+    if (!hasValidMime && !hasValidExt) {
+      showToast('Supported formats: PNG, JPG, JPEG, WEBP', 'error');
+      return;
+    }
+
     if (file.size > 2 * 1024 * 1024) {
       showToast('Logo file size must be less than 2MB', 'error');
       return;
@@ -146,6 +159,7 @@ export const ProfileView: React.FC = () => {
       }
     };
     reader.readAsDataURL(file);
+    e.target.value = '';
   };
 
   const handleRemoveLogo = async () => {

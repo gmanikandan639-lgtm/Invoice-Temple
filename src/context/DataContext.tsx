@@ -34,6 +34,7 @@ import {
   onSnapshot,
   query,
   orderBy,
+  where,
 } from 'firebase/firestore';
 import { useAuth } from './AuthContext';
 
@@ -148,6 +149,26 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     loadLocal('activity_logs', INITIAL_ACTIVITY_LOGS)
   );
 
+  // Switch user-specific company settings whenever currentUser changes
+  useEffect(() => {
+    if (currentUser?.uid) {
+      if (currentUser.companySettings) {
+        setCompanySettings(currentUser.companySettings);
+      } else {
+        const userSaved = loadLocal<CompanySettings | null>(`company_settings_${currentUser.uid}`, null);
+        if (userSaved) {
+          setCompanySettings(userSaved);
+        } else {
+          setCompanySettings({
+            ...DEFAULT_COMPANY_SETTINGS,
+            companyName: currentUser.companyName || 'My Company',
+            logoUrl: '',
+          });
+        }
+      }
+    }
+  }, [currentUser?.uid, currentUser?.companySettings, currentUser?.companyName]);
+
   // Sync to local storage
   const saveLocal = (key: string, data: any) => {
     localStorage.setItem(STORAGE_PREFIX + key, JSON.stringify(data));
@@ -169,9 +190,38 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return;
       }
 
+      const isAdminUser =
+        currentUser?.role === 'admin' ||
+        firebaseUser.email === 'gmanikandan639@gmail.com' ||
+        firebaseUser.email?.includes('admin');
+
       try {
-        // Invoices
-        const qInvoices = query(collection(db, 'invoices'), orderBy('createdAt', 'desc'));
+        // User-specific Company Profile & Settings Listener
+        const unsubUserDoc = onSnapshot(
+          doc(db, 'users', firebaseUser.uid),
+          (d) => {
+            if (d.exists()) {
+              const uData = d.data();
+              if (uData.companySettings) {
+                setCompanySettings(uData.companySettings as CompanySettings);
+                saveLocal(`company_settings_${firebaseUser.uid}`, uData.companySettings);
+              } else if (uData.companyName) {
+                setCompanySettings((prev) => ({
+                  ...prev,
+                  companyName: uData.companyName,
+                }));
+              }
+            }
+          },
+          (err) => handleFirestoreError(err, OperationType.GET, `users/${firebaseUser.uid}`)
+        );
+        unsubs.push(unsubUserDoc);
+
+        // Invoices: admin sees all; normal user sees only their own
+        const qInvoices = isAdminUser
+          ? query(collection(db, 'invoices'), orderBy('createdAt', 'desc'))
+          : query(collection(db, 'invoices'), where('createdBy', '==', firebaseUser.uid));
+
         const unsubInvoices = onSnapshot(
           qInvoices,
           (snapshot) => {
@@ -186,8 +236,11 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         );
         unsubs.push(unsubInvoices);
 
-        // Customers
-        const qCustomers = query(collection(db, 'customers'), orderBy('createdAt', 'desc'));
+        // Customers: admin sees all; normal user sees only their own
+        const qCustomers = isAdminUser
+          ? query(collection(db, 'customers'), orderBy('createdAt', 'desc'))
+          : query(collection(db, 'customers'), where('createdBy', '==', firebaseUser.uid));
+
         const unsubCustomers = onSnapshot(
           qCustomers,
           (snapshot) => {
@@ -202,8 +255,11 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         );
         unsubs.push(unsubCustomers);
 
-        // Products
-        const qProducts = query(collection(db, 'products'), orderBy('createdAt', 'desc'));
+        // Products: admin sees all; normal user sees only their own
+        const qProducts = isAdminUser
+          ? query(collection(db, 'products'), orderBy('createdAt', 'desc'))
+          : query(collection(db, 'products'), where('createdBy', '==', firebaseUser.uid));
+
         const unsubProducts = onSnapshot(
           qProducts,
           (snapshot) => {
@@ -218,8 +274,11 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         );
         unsubs.push(unsubProducts);
 
-        // Payments
-        const qPayments = query(collection(db, 'payments'), orderBy('createdAt', 'desc'));
+        // Payments: admin sees all; normal user sees only their own
+        const qPayments = isAdminUser
+          ? query(collection(db, 'payments'), orderBy('createdAt', 'desc'))
+          : query(collection(db, 'payments'), where('createdBy', '==', firebaseUser.uid));
+
         const unsubPayments = onSnapshot(
           qPayments,
           (snapshot) => {
@@ -234,21 +293,28 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         );
         unsubs.push(unsubPayments);
 
-        // Settings Company
-        const unsubCompany = onSnapshot(
-          doc(db, 'settings', 'company'),
-          (d) => {
-            if (d.exists()) {
-              const data = d.data() as CompanySettings;
-              setCompanySettings(data);
-              saveLocal('company_settings', data);
-            }
-          },
-          (err) => handleFirestoreError(err, OperationType.GET, 'settings/company')
-        );
-        unsubs.push(unsubCompany);
+        // Admin-only User Directory Listener
+        if (isAdminUser) {
+          const qUsers = query(collection(db, 'users'), orderBy('createdAt', 'desc'));
+          const unsubUsers = onSnapshot(
+            qUsers,
+            (snapshot) => {
+              const list: UserProfile[] = [];
+              snapshot.forEach((d) => {
+                const uData = d.data() as UserProfile;
+                list.push({ ...uData, uid: d.id });
+              });
+              if (list.length > 0) {
+                setUsers(list);
+                saveLocal('users', list);
+              }
+            },
+            (err) => handleFirestoreError(err, OperationType.LIST, 'users')
+          );
+          unsubs.push(unsubUsers);
+        }
 
-        // Settings Invoice
+        // Settings Invoice (Sequence, numbering & general defaults)
         const unsubInvoice = onSnapshot(
           doc(db, 'settings', 'invoice'),
           (d) => {
@@ -270,7 +336,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       unsubscribeAuth();
       unsubs.forEach((u) => u());
     };
-  }, []);
+  }, [currentUser?.role]);
 
   const logActivity = (action: string, module: string, recordId?: string, metadata?: Record<string, any>) => {
     const newLog: ActivityLog = {

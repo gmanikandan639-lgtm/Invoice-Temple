@@ -56,12 +56,10 @@ export const DEFAULT_INVOICE_SETTINGS: InvoiceSettings = {
   showIgst: false,
   showPaymentMode: true,
   showDueDate: true,
-  showPoNumber: true,
   showNotes: true,
   showTerms: true,
   showBankDetails: true,
   showSignature: true,
-  showDescription: true,
   showLogo: true,
   updatedAt: new Date().toISOString(),
 };

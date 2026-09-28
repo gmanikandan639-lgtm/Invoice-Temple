@@ -4,6 +4,7 @@ import { INITIAL_USERS } from '../data/initialData';
 import { auth, db, isConfigured, handleFirestoreError, OperationType } from '../lib/firebase';
 import {
   signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
   signOut,
   onAuthStateChanged,
   sendPasswordResetEmail,
@@ -18,6 +19,12 @@ interface AuthContextType {
   loading: boolean;
   isFirebaseMode: boolean;
   login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
+  register: (data: {
+    name: string;
+    mobile: string;
+    email: string;
+    password: string;
+  }) => Promise<{ success: boolean; error?: string }>;
   signInWithGoogle: (customEmail?: string) => Promise<{ success: boolean; error?: string }>;
   quickLoginAs: (role: 'admin' | 'user') => void;
   logout: () => Promise<void>;
@@ -78,7 +85,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                     name: data.name || data.displayName || firebaseUser.displayName || 'User',
                     email: data.email || firebaseUser.email || '',
                     phone: data.phone || '',
-                    companyName: data.companyName || '',
+                    companyName: data.companySettings?.companyName || data.companyName || '',
+                    companySettings: data.companySettings || undefined,
                     designation: data.designation || '',
                     signatureUrl: data.signatureUrl || '',
                     themePreference: data.themePreference || 'light',
@@ -232,6 +240,101 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       localStorage.setItem(LOCAL_STORAGE_USER_KEY, JSON.stringify(profile));
       setLoading(false);
       return { success: true };
+    }
+  };
+
+  const register = async (data: {
+    name: string;
+    mobile: string;
+    email: string;
+    password: string;
+  }): Promise<{ success: boolean; error?: string }> => {
+    setLoading(true);
+    const normalizedEmail = data.email.trim().toLowerCase();
+    const cleanName = data.name.trim();
+    const cleanPhone = data.mobile.trim();
+
+    try {
+      if (isConfigured && auth) {
+        // 1. Create account with Firebase Authentication
+        const userCred = await createUserWithEmailAndPassword(auth, normalizedEmail, data.password);
+        const fbUser = userCred.user;
+
+        // 2. Default role is strictly 'user' (Normal User only)
+        const initialProfile: UserProfile = {
+          uid: fbUser.uid,
+          name: cleanName,
+          displayName: cleanName,
+          preferredName: cleanName.split(' ')[0] || cleanName,
+          email: normalizedEmail,
+          phone: cleanPhone,
+          companyName: '',
+          designation: '',
+          signatureUrl: '',
+          themePreference: 'light',
+          role: 'user', // Public registration ALWAYS receives 'user' role
+          status: 'active',
+          photoURL: '',
+          profilePhoto: '',
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+          lastLoginAt: new Date().toISOString(),
+        };
+
+        // 3. Persist user profile to Firestore (WITHOUT password)
+        if (db) {
+          const userDocRef = doc(db, 'users', fbUser.uid);
+          await setDoc(userDocRef, initialProfile, { merge: true });
+        }
+
+        setCurrentUser(initialProfile);
+        localStorage.setItem(LOCAL_STORAGE_USER_KEY, JSON.stringify(initialProfile));
+        setLoading(false);
+        return { success: true };
+      } else {
+        // Fallback / Offline / Demo mode
+        const uid = 'user_' + Date.now();
+        const initialProfile: UserProfile = {
+          uid,
+          name: cleanName,
+          displayName: cleanName,
+          preferredName: cleanName.split(' ')[0] || cleanName,
+          email: normalizedEmail,
+          phone: cleanPhone,
+          companyName: '',
+          designation: '',
+          signatureUrl: '',
+          themePreference: 'light',
+          role: 'user', // Strictly normal user
+          status: 'active',
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+          lastLoginAt: new Date().toISOString(),
+        };
+
+        setCurrentUser(initialProfile);
+        localStorage.setItem(LOCAL_STORAGE_USER_KEY, JSON.stringify(initialProfile));
+
+        // Save to local user list so admin can see
+        const savedUsers = localStorage.getItem('invoice_temple_users');
+        const userList = savedUsers ? JSON.parse(savedUsers) : [...INITIAL_USERS];
+        userList.push(initialProfile);
+        localStorage.setItem('invoice_temple_users', JSON.stringify(userList));
+
+        setLoading(false);
+        return { success: true };
+      }
+    } catch (err: any) {
+      setLoading(false);
+      let msg = err.message || 'Registration failed.';
+      if (err.code === 'auth/email-already-in-use') {
+        msg = 'An account with this email address already exists. Please sign in.';
+      } else if (err.code === 'auth/weak-password') {
+        msg = 'Password should be at least 6 characters.';
+      } else if (err.code === 'auth/invalid-email') {
+        msg = 'Please enter a valid email address.';
+      }
+      return { success: false, error: msg };
     }
   };
 
@@ -390,12 +493,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           profilePhoto: updated.profilePhoto || updated.photoURL || '',
           photoURL: updated.photoURL || updated.profilePhoto || '',
           phone: updated.phone || '',
-          companyName: updated.companyName || '',
+          companyName: updated.companySettings?.companyName || updated.companyName || '',
           designation: updated.designation || '',
           signatureUrl: updated.signatureUrl || '',
           themePreference: updated.themePreference || 'light',
           updatedAt: updated.updatedAt,
         };
+
+        if (updated.companySettings) {
+          payload.companySettings = updated.companySettings;
+        }
 
         if (currentUser.role === 'admin') {
           payload.role = updated.role;
@@ -433,6 +540,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         loading,
         isFirebaseMode: isConfigured,
         login,
+        register,
         signInWithGoogle,
         quickLoginAs,
         logout,
