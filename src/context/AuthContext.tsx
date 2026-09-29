@@ -327,7 +327,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } catch (err: any) {
       setLoading(false);
       let msg = err.message || 'Registration failed.';
-      if (err.code === 'auth/email-already-in-use') {
+      if (err.code === 'auth/operation-not-allowed') {
+        msg = 'Email/Password authentication is currently disabled in your Firebase project. Please enable "Email/Password" in Firebase Console -> Authentication -> Sign-in method, or use "Continue with Google" below.';
+      } else if (err.code === 'auth/email-already-in-use') {
         msg = 'An account with this email address already exists. Please sign in.';
       } else if (err.code === 'auth/weak-password') {
         msg = 'Password should be at least 6 characters.';
@@ -349,26 +351,105 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           provider.setCustomParameters({ prompt: 'select_account' });
           const userCred = await signInWithPopup(auth, provider);
           const fbUser = userCred.user;
-          const email = fbUser.email || customEmail || 'user@gmail.com';
-          const isAdm =
-            email.toLowerCase() === 'gmanikandan639@gmail.com' ||
-            email.toLowerCase().includes('admin');
+          const email = (fbUser.email || customEmail || 'user@gmail.com').trim().toLowerCase();
+          const isOwnerAdmin = email === 'gmanikandan639@gmail.com';
           const dName = fbUser.displayName || email.split('@')[0];
           const pName = dName.split(' ')[0] || dName;
-          const profile: UserProfile = {
-            uid: fbUser.uid,
-            name: dName,
-            displayName: dName,
-            preferredName: pName,
-            email: email,
-            role: isAdm ? 'admin' : 'user',
-            status: 'active',
-            photoURL: fbUser.photoURL || undefined,
-            profilePhoto: fbUser.photoURL || undefined,
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-            lastLoginAt: new Date().toISOString(),
-          };
+
+          let profile: UserProfile;
+
+          // Check if user already exists in Firestore to avoid duplicating or overwriting role/company
+          if (db) {
+            const userDocRef = doc(db, 'users', fbUser.uid);
+            try {
+              const snap = await getDoc(userDocRef);
+              if (snap.exists()) {
+                const data = snap.data();
+                const assignedRole: UserRole =
+                  data.role === 'admin' || data.role === 'user'
+                    ? data.role
+                    : isOwnerAdmin
+                    ? 'admin'
+                    : 'user';
+
+                profile = {
+                  uid: fbUser.uid,
+                  name: data.name || data.displayName || dName,
+                  displayName: data.displayName || data.name || dName,
+                  preferredName: data.preferredName || pName,
+                  email: data.email || email,
+                  phone: data.phone || fbUser.phoneNumber || '',
+                  companyName: data.companySettings?.companyName || data.companyName || '',
+                  companySettings: data.companySettings || undefined,
+                  designation: data.designation || '',
+                  signatureUrl: data.signatureUrl || '',
+                  themePreference: data.themePreference || 'light',
+                  role: assignedRole,
+                  status: data.status || 'active',
+                  photoURL: data.photoURL || fbUser.photoURL || undefined,
+                  profilePhoto: data.profilePhoto || fbUser.photoURL || undefined,
+                  createdAt: data.createdAt || new Date().toISOString(),
+                  updatedAt: data.updatedAt || new Date().toISOString(),
+                  lastLoginAt: new Date().toISOString(),
+                };
+                await setDoc(userDocRef, { lastLoginAt: profile.lastLoginAt }, { merge: true });
+              } else {
+                // First-time Google user: strictly assigned default 'user' (Normal User) role
+                profile = {
+                  uid: fbUser.uid,
+                  name: dName,
+                  displayName: dName,
+                  preferredName: pName,
+                  email: email,
+                  phone: fbUser.phoneNumber || '',
+                  companyName: '',
+                  designation: '',
+                  signatureUrl: '',
+                  themePreference: 'light',
+                  role: isOwnerAdmin ? 'admin' : 'user', // Default role is strictly Normal User
+                  status: 'active',
+                  photoURL: fbUser.photoURL || undefined,
+                  profilePhoto: fbUser.photoURL || undefined,
+                  createdAt: new Date().toISOString(),
+                  updatedAt: new Date().toISOString(),
+                  lastLoginAt: new Date().toISOString(),
+                };
+                await setDoc(userDocRef, profile, { merge: true });
+              }
+            } catch (firestoreErr) {
+              console.warn('Error reading/writing Google user profile in Firestore:', firestoreErr);
+              profile = {
+                uid: fbUser.uid,
+                name: dName,
+                displayName: dName,
+                preferredName: pName,
+                email: email,
+                phone: '',
+                companyName: '',
+                role: isOwnerAdmin ? 'admin' : 'user',
+                status: 'active',
+                createdAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString(),
+                lastLoginAt: new Date().toISOString(),
+              };
+            }
+          } else {
+            profile = {
+              uid: fbUser.uid,
+              name: dName,
+              displayName: dName,
+              preferredName: pName,
+              email: email,
+              phone: '',
+              companyName: '',
+              role: isOwnerAdmin ? 'admin' : 'user',
+              status: 'active',
+              createdAt: new Date().toISOString(),
+              updatedAt: new Date().toISOString(),
+              lastLoginAt: new Date().toISOString(),
+            };
+          }
+
           setCurrentUser(profile);
           localStorage.setItem(LOCAL_STORAGE_USER_KEY, JSON.stringify(profile));
           setLoading(false);

@@ -351,14 +351,14 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ initialTab = 'compan
 
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">
-                  GSTIN (15 Digits) *
+                  GSTIN (15 Digits)
                 </label>
                 <input
                   type="text"
                   value={formData.gstin}
                   onChange={(e) => handleGstinChange(e.target.value)}
-                  required
                   maxLength={15}
+                  placeholder="Optional"
                   className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-mono font-bold uppercase"
                 />
                 <span className="text-[10px] text-slate-400 mt-1 block">
@@ -368,40 +368,40 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ initialTab = 'compan
 
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">
-                  PAN Number *
+                  PAN Number
                 </label>
                 <input
                   type="text"
                   value={formData.pan}
                   onChange={(e) => handleTextChange('pan', e.target.value.toUpperCase())}
-                  required
                   maxLength={10}
+                  placeholder="Optional"
                   className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-mono font-bold uppercase"
                 />
               </div>
 
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">
-                  Billing Phone Number *
+                  Billing Phone Number
                 </label>
                 <input
                   type="text"
                   value={formData.phone}
                   onChange={(e) => handleTextChange('phone', e.target.value)}
-                  required
+                  placeholder="Optional"
                   className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs"
                 />
               </div>
 
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">
-                  Support / Invoicing Email *
+                  Support / Invoicing Email
                 </label>
                 <input
                   type="email"
                   value={formData.email}
                   onChange={(e) => handleTextChange('email', e.target.value)}
-                  required
+                  placeholder="Optional"
                   className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs"
                 />
               </div>
@@ -409,37 +409,37 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ initialTab = 'compan
 
             <div>
               <label className="block text-xs font-bold text-slate-700 mb-1">
-                Registered Office Address *
+                Registered Office Address
               </label>
               <textarea
                 rows={2}
                 value={formData.address}
                 onChange={(e) => handleTextChange('address', e.target.value)}
-                required
+                placeholder="Optional"
                 className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs"
               />
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">City *</label>
+                <label className="block text-xs font-bold text-slate-700 mb-1">City</label>
                 <input
                   type="text"
                   value={formData.city}
                   onChange={(e) => handleTextChange('city', e.target.value)}
-                  required
+                  placeholder="Optional"
                   className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">State *</label>
+                <label className="block text-xs font-bold text-slate-700 mb-1">State</label>
                 <select
                   value={formData.state}
                   onChange={(e) => handleStateChange(e.target.value)}
-                  required
                   className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs bg-white"
                 >
+                  <option value="">-- Select State (Optional) --</option>
                   {INDIAN_STATES.map((s) => (
                     <option key={s.code} value={s.name}>
                       {s.code} - {s.name}
@@ -449,12 +449,12 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ initialTab = 'compan
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">PIN Code *</label>
+                <label className="block text-xs font-bold text-slate-700 mb-1">PIN Code</label>
                 <input
                   type="text"
                   value={formData.pincode}
                   onChange={(e) => handleTextChange('pincode', e.target.value)}
-                  required
+                  placeholder="Optional"
                   className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-mono"
                 />
               </div>
@@ -687,53 +687,52 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ initialTab = 'compan
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">
-                  Bank Name *
+                  Bank Name
                 </label>
                 <input
                   type="text"
                   value={formData.bankName}
                   onChange={(e) => handleTextChange('bankName', e.target.value)}
-                  required
-                  placeholder="e.g. HDFC Bank Ltd"
+                  placeholder="e.g. HDFC Bank Ltd (Optional)"
                   className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs"
                 />
               </div>
 
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">
-                  Account Holder / Beneficiary Name *
+                  Account Holder / Beneficiary Name
                 </label>
                 <input
                   type="text"
                   value={formData.accountHolderName}
                   onChange={(e) => handleTextChange('accountHolderName', e.target.value)}
-                  required
+                  placeholder="Optional"
                   className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs"
                 />
               </div>
 
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">
-                  Account Number *
+                  Account Number
                 </label>
                 <input
                   type="text"
                   value={formData.accountNumber}
                   onChange={(e) => handleTextChange('accountNumber', e.target.value)}
-                  required
+                  placeholder="Optional"
                   className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-mono"
                 />
               </div>
 
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">
-                  IFSC Code (11 Digits) *
+                  IFSC Code (11 Digits)
                 </label>
                 <input
                   type="text"
                   value={formData.ifscCode}
                   onChange={(e) => handleTextChange('ifscCode', e.target.value.toUpperCase())}
-                  required
+                  placeholder="Optional"
                   className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-mono uppercase"
                 />
               </div>
@@ -746,19 +745,20 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ initialTab = 'compan
                   type="text"
                   value={formData.branchName}
                   onChange={(e) => handleTextChange('branchName', e.target.value)}
+                  placeholder="Optional"
                   className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs"
                 />
               </div>
 
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">
-                  UPI VPA Identifier (for Instant QR Generation) *
+                  UPI VPA Identifier (for Instant QR Generation)
                 </label>
                 <input
                   type="text"
                   value={formData.upiId}
                   onChange={(e) => handleTextChange('upiId', e.target.value)}
-                  placeholder="e.g. invoicetemple@okhdfcbank"
+                  placeholder="e.g. invoicetemple@okhdfcbank (Optional)"
                   className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-mono"
                 />
                 <span className="text-[10px] text-slate-400 mt-1 block">

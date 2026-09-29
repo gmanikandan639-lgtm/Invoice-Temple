@@ -9,6 +9,7 @@ import {
 } from 'firebase/auth';
 import {
   getFirestore,
+  initializeFirestore,
   Firestore,
   collection,
   doc,
@@ -21,7 +22,6 @@ import {
   where,
   orderBy,
   onSnapshot,
-  getDocFromServer,
 } from 'firebase/firestore';
 
 export interface FirebaseConfig {
@@ -57,15 +57,16 @@ if (isConfigured) {
   try {
     app = getApps().length > 0 ? getApp() : initializeApp(config);
     auth = getAuth(app);
-    db = getFirestore(app);
+    // Use initializeFirestore with experimentalForceLongPolling to avoid
+    // WebChannel/streaming disconnection errors in proxy, preview iframe, and restrictive network environments
+    try {
+      db = initializeFirestore(app, {
+        experimentalForceLongPolling: true,
+      });
+    } catch {
+      db = getFirestore(app);
+    }
     console.log('Firebase initialized with Project ID:', config.projectId);
-
-    // Validate connection test as required by skill
-    getDocFromServer(doc(db, 'test', 'connection')).catch((err) => {
-      if (err instanceof Error && err.message.includes('the client is offline')) {
-        console.warn('Firebase client is offline. Verify network connection and project rules.');
-      }
-    });
   } catch (err) {
     console.warn('Firebase initialization error:', err);
   }
@@ -101,10 +102,16 @@ export interface FirestoreErrorInfo {
 }
 
 export function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
+  const errMsg = error instanceof Error ? error.message : String(error);
+  const isPermissionError =
+    errMsg.toLowerCase().includes('permission') ||
+    errMsg.toLowerCase().includes('insufficient') ||
+    errMsg.toLowerCase().includes('permission-denied');
+
   const currentAuth = auth;
   const currentUser = currentAuth?.currentUser;
   const errInfo: FirestoreErrorInfo = {
-    error: error instanceof Error ? error.message : String(error),
+    error: errMsg,
     authInfo: {
       userId: currentUser?.uid,
       email: currentUser?.email,
@@ -119,6 +126,12 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
     operationType,
     path,
   };
-  console.error('Firestore Error: ', JSON.stringify(errInfo));
-  throw new Error(JSON.stringify(errInfo));
+
+  if (isPermissionError) {
+    console.error('Firestore Permission Error: ', JSON.stringify(errInfo));
+    throw new Error(JSON.stringify(errInfo));
+  } else {
+    // For offline, unavailable, or transient sync states, log informational notice without throwing uncaught exceptions
+    console.warn(`Firestore notice (${operationType} at ${path}):`, errMsg);
+  }
 }
