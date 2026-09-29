@@ -215,18 +215,19 @@ export const AdminUserListView: React.FC<AdminUserListViewProps> = ({ onNavigate
             <thead className="bg-slate-50 text-slate-500 font-semibold border-b border-slate-100 uppercase tracking-wider text-[10px]">
               <tr>
                 <th className="px-5 py-3">User</th>
+                <th className="px-5 py-3">Company</th>
                 <th className="px-5 py-3">Role</th>
-                <th className="px-5 py-3">Phone</th>
-                <th className="px-5 py-3">Account Status</th>
-                <th className="px-5 py-3">Last Login</th>
-                <th className="px-5 py-3">Created</th>
+                <th className="px-5 py-3">Mobile</th>
+                <th className="px-5 py-3">Status</th>
+                <th className="px-5 py-3">Registered</th>
+                <th className="px-5 py-3">Updated</th>
                 <th className="px-5 py-3 text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {filteredUsers.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-5 py-10 text-center text-slate-400">
+                  <td colSpan={8} className="px-5 py-10 text-center text-slate-400">
                     No users found matching query.
                   </td>
                 </tr>
@@ -248,7 +249,12 @@ export const AdminUserListView: React.FC<AdminUserListViewProps> = ({ onNavigate
                         </div>
                         <div>
                           <div className="flex items-center gap-1.5">
-                            <p className="font-bold text-slate-900">{u.displayName || u.name}</p>
+                            <p className="font-bold text-slate-900">{u.name}</p>
+                            {u.displayName && u.displayName !== u.name && (
+                              <span className="text-[10px] text-slate-500 font-medium">
+                                ({u.displayName})
+                              </span>
+                            )}
                             {u.preferredName && (
                               <span className="text-[10px] bg-amber-50 text-amber-900 border border-amber-200 px-1.5 py-0.2 rounded-md font-semibold">
                                 &quot;{u.preferredName}&quot;
@@ -259,6 +265,27 @@ export const AdminUserListView: React.FC<AdminUserListViewProps> = ({ onNavigate
                           {u.designation && (
                             <p className="text-[9px] text-slate-500">{u.designation}</p>
                           )}
+                        </div>
+                      </div>
+                    </td>
+
+                    {/* Company Name & Logo */}
+                    <td className="px-5 py-3.5">
+                      <div className="flex items-center gap-2">
+                        {u.companySettings?.logoUrl ? (
+                          <img
+                            src={u.companySettings.logoUrl}
+                            alt="Logo"
+                            className="w-6 h-6 object-contain rounded-md border border-slate-200 bg-white p-0.5"
+                          />
+                        ) : null}
+                        <div>
+                          <p className="font-semibold text-slate-800 text-xs">
+                            {u.companySettings?.companyName || u.companyName || 'Not configured'}
+                          </p>
+                          <span className="text-[9px] text-slate-400">
+                            {u.companySettings?.logoUrl ? 'Logo Configured' : 'No Logo'}
+                          </span>
                         </div>
                       </div>
                     </td>
@@ -275,7 +302,7 @@ export const AdminUserListView: React.FC<AdminUserListViewProps> = ({ onNavigate
                       </span>
                     </td>
 
-                    <td className="px-5 py-3.5 text-slate-600">
+                    <td className="px-5 py-3.5 text-slate-600 font-mono text-xs">
                       {u.phone || '-'}
                     </td>
 
@@ -292,11 +319,11 @@ export const AdminUserListView: React.FC<AdminUserListViewProps> = ({ onNavigate
                     </td>
 
                     <td className="px-5 py-3.5 text-slate-500">
-                      {u.lastLogin || 'Never'}
+                      {formatDate(u.createdAt)}
                     </td>
 
                     <td className="px-5 py-3.5 text-slate-500">
-                      {formatDate(u.createdAt)}
+                      {formatDate(u.updatedAt || u.createdAt)}
                     </td>
 
                     <td className="px-5 py-3.5 text-right">

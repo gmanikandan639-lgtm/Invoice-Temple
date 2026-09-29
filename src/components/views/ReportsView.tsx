@@ -12,6 +12,7 @@ import {
   Package,
 } from 'lucide-react';
 import { useData } from '../../context/DataContext';
+import { useAuth } from '../../context/AuthContext';
 import { formatCurrency, formatDate } from '../../utils/formatters';
 import { useToast } from '../common/Toast';
 
@@ -38,7 +39,10 @@ type PeriodFilter =
 
 export const ReportsView: React.FC = () => {
   const { invoices, customers, products, payments, users, companySettings } = useData();
+  const { role } = useAuth();
   const { showToast } = useToast();
+
+  const isAdmin = role === 'admin';
 
   const [activeReport, setActiveReport] = useState<ReportType>('sales');
   const [period, setPeriod] = useState<PeriodFilter>('this_month');
@@ -122,6 +126,7 @@ export const ReportsView: React.FC = () => {
   const salesReportData = useMemo(() => {
     return filteredInvoices.map((inv) => ({
       invoiceNumber: inv.invoiceNumber,
+      company: inv.companySnapshot?.companyName || companySettings.companyName || 'N/A',
       date: inv.invoiceDate,
       customer: inv.customerSnapshot?.customerName || 'N/A',
       taxable: inv.taxableAmount,
@@ -131,7 +136,7 @@ export const ReportsView: React.FC = () => {
       balance: inv.balanceAmount,
       status: inv.paymentStatus,
     }));
-  }, [filteredInvoices]);
+  }, [filteredInvoices, companySettings.companyName]);
 
   // Report 2: GST Rate-wise summary (GSTR-1 summary)
   const gstTaxSummary = useMemo(() => {
@@ -261,21 +266,17 @@ export const ReportsView: React.FC = () => {
   // Handle Export based on active report
   const handleExportCSV = () => {
     if (activeReport === 'sales') {
-      exportToCSV(
-        `sales_report_${period}`,
-        ['Invoice Number', 'Date', 'Customer', 'Taxable (INR)', 'GST (INR)', 'Total (INR)', 'Paid (INR)', 'Balance (INR)', 'Status'],
-        salesReportData.map((r) => [
-          r.invoiceNumber,
-          r.date,
-          r.customer,
-          r.taxable,
-          r.gst,
-          r.total,
-          r.paid,
-          r.balance,
-          r.status,
-        ])
+      const headers = isAdmin
+        ? ['Invoice No', 'Company', 'Date', 'Customer', 'Taxable (INR)', 'GST (INR)', 'Total (INR)', 'Paid (INR)', 'Balance (INR)', 'Status']
+        : ['Invoice No', 'Date', 'Customer', 'Taxable (INR)', 'GST (INR)', 'Total (INR)', 'Paid (INR)', 'Balance (INR)', 'Status'];
+
+      const rows = salesReportData.map((r) =>
+        isAdmin
+          ? [r.invoiceNumber, r.company, r.date, r.customer, r.taxable, r.gst, r.total, r.paid, r.balance, r.status]
+          : [r.invoiceNumber, r.date, r.customer, r.taxable, r.gst, r.total, r.paid, r.balance, r.status]
       );
+
+      exportToCSV(`sales_report_${period}`, headers, rows);
     } else if (activeReport === 'tax') {
       exportToCSV(
         `tax_summary_${period}`,
@@ -417,6 +418,7 @@ export const ReportsView: React.FC = () => {
               <thead className="bg-slate-50 text-slate-500 font-semibold uppercase tracking-wider text-[10px] border-b border-slate-100">
                 <tr>
                   <th className="px-4 py-3">Invoice No</th>
+                  {isAdmin && <th className="px-4 py-3">Company</th>}
                   <th className="px-4 py-3">Date</th>
                   <th className="px-4 py-3">Customer</th>
                   <th className="px-4 py-3 text-right">Taxable</th>
@@ -430,7 +432,7 @@ export const ReportsView: React.FC = () => {
               <tbody className="divide-y divide-slate-100">
                 {salesReportData.length === 0 ? (
                   <tr>
-                    <td colSpan={9} className="px-4 py-8 text-center text-slate-400">
+                    <td colSpan={isAdmin ? 10 : 9} className="px-4 py-8 text-center text-slate-400">
                       No invoices found for this date range.
                     </td>
                   </tr>
@@ -438,6 +440,9 @@ export const ReportsView: React.FC = () => {
                   salesReportData.map((r, i) => (
                     <tr key={i} className="hover:bg-slate-50">
                       <td className="px-4 py-3 font-bold text-slate-900">{r.invoiceNumber}</td>
+                      {isAdmin && (
+                        <td className="px-4 py-3 font-semibold text-amber-800 text-xs">{r.company}</td>
+                      )}
                       <td className="px-4 py-3 text-slate-600">{formatDate(r.date)}</td>
                       <td className="px-4 py-3 font-semibold text-slate-800">{r.customer}</td>
                       <td className="px-4 py-3 text-right">{formatCurrency(r.taxable)}</td>
@@ -655,6 +660,7 @@ export const ReportsView: React.FC = () => {
               <thead className="bg-slate-50 text-slate-500 font-semibold uppercase tracking-wider text-[10px] border-b border-slate-100">
                 <tr>
                   <th className="px-5 py-3">Invoice No</th>
+                  {isAdmin && <th className="px-5 py-3">Company</th>}
                   <th className="px-5 py-3">Due Date</th>
                   <th className="px-5 py-3 text-center">Days Overdue</th>
                   <th className="px-5 py-3">Customer Contact</th>
@@ -665,7 +671,7 @@ export const ReportsView: React.FC = () => {
               <tbody className="divide-y divide-slate-100">
                 {overdueReportData.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="px-5 py-8 text-center text-emerald-600 font-semibold">
+                    <td colSpan={isAdmin ? 7 : 6} className="px-5 py-8 text-center text-emerald-600 font-semibold">
                       Excellent! Zero overdue invoices across the books.
                     </td>
                   </tr>
@@ -673,6 +679,11 @@ export const ReportsView: React.FC = () => {
                   overdueReportData.map((inv) => (
                     <tr key={inv.id} className="hover:bg-rose-50/30">
                       <td className="px-5 py-3.5 font-bold text-slate-900">{inv.invoiceNumber}</td>
+                      {isAdmin && (
+                        <td className="px-5 py-3.5 font-semibold text-amber-800 text-xs">
+                          {inv.companySnapshot?.companyName || companySettings.companyName || 'N/A'}
+                        </td>
+                      )}
                       <td className="px-5 py-3.5 text-slate-600">{formatDate(inv.dueDate)}</td>
                       <td className="px-5 py-3.5 text-center">
                         <span className="px-2 py-0.5 rounded-full bg-rose-100 text-rose-800 font-black text-[11px]">

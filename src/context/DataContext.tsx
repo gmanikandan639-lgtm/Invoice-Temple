@@ -93,7 +93,7 @@ if (typeof window !== 'undefined' && !localStorage.getItem(CLEAN_SLATE_KEY)) {
 }
 
 export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { currentUser } = useAuth();
+  const { currentUser, updateCurrentProfile } = useAuth();
 
   // Helper to get cached or default data
   const loadLocal = <T,>(key: string, fallback: T): T => {
@@ -166,8 +166,20 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
           });
         }
       }
+
+      // If switching user, load user-specific cached records when available
+      if (currentUser.role !== 'admin') {
+        const userInvoices = loadLocal<Invoice[]>(`invoices_${currentUser.uid}`, []);
+        const userCustomers = loadLocal<Customer[]>(`customers_${currentUser.uid}`, []);
+        const userProducts = loadLocal<Product[]>(`products_${currentUser.uid}`, []);
+        const userPayments = loadLocal<Payment[]>(`payments_${currentUser.uid}`, []);
+        setInvoices(userInvoices);
+        setCustomers(userCustomers);
+        setProducts(userProducts);
+        setPayments(userPayments);
+      }
     }
-  }, [currentUser?.uid, currentUser?.companySettings, currentUser?.companyName]);
+  }, [currentUser?.uid, currentUser?.companySettings, currentUser?.companyName, currentUser?.role]);
 
   // Sync to local storage
   const saveLocal = (key: string, data: any) => {
@@ -227,9 +239,11 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
           (snapshot) => {
             const list: Invoice[] = [];
             snapshot.forEach((d) => list.push({ ...(d.data() as Invoice), id: d.id }));
-            if (list.length > 0) {
-              setInvoices(list);
+            setInvoices(list);
+            if (isAdminUser) {
               saveLocal('invoices', list);
+            } else {
+              saveLocal(`invoices_${firebaseUser.uid}`, list);
             }
           },
           (err) => handleFirestoreError(err, OperationType.LIST, 'invoices')
@@ -246,9 +260,11 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
           (snapshot) => {
             const list: Customer[] = [];
             snapshot.forEach((d) => list.push({ ...(d.data() as Customer), id: d.id }));
-            if (list.length > 0) {
-              setCustomers(list);
+            setCustomers(list);
+            if (isAdminUser) {
               saveLocal('customers', list);
+            } else {
+              saveLocal(`customers_${firebaseUser.uid}`, list);
             }
           },
           (err) => handleFirestoreError(err, OperationType.LIST, 'customers')
@@ -265,9 +281,11 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
           (snapshot) => {
             const list: Product[] = [];
             snapshot.forEach((d) => list.push({ ...(d.data() as Product), id: d.id }));
-            if (list.length > 0) {
-              setProducts(list);
+            setProducts(list);
+            if (isAdminUser) {
               saveLocal('products', list);
+            } else {
+              saveLocal(`products_${firebaseUser.uid}`, list);
             }
           },
           (err) => handleFirestoreError(err, OperationType.LIST, 'products')
@@ -284,9 +302,11 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
           (snapshot) => {
             const list: Payment[] = [];
             snapshot.forEach((d) => list.push({ ...(d.data() as Payment), id: d.id }));
-            if (list.length > 0) {
-              setPayments(list);
+            setPayments(list);
+            if (isAdminUser) {
               saveLocal('payments', list);
+            } else {
+              saveLocal(`payments_${firebaseUser.uid}`, list);
             }
           },
           (err) => handleFirestoreError(err, OperationType.LIST, 'payments')
@@ -385,11 +405,35 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const updateCompanySettings = async (newSettings: CompanySettings) => {
     const updated = { ...newSettings, updatedAt: new Date().toISOString() };
     setCompanySettings(updated);
+
+    // Save to user-specific local storage
+    if (currentUser?.uid) {
+      saveLocal(`company_settings_${currentUser.uid}`, updated);
+    }
     saveLocal('company_settings', updated);
     logActivity('Company Settings Updated', 'Settings');
 
-    if (isConfigured && db && auth?.currentUser) {
-      await setDoc(doc(db, 'settings', 'company'), updated);
+    // Update the currentUser profile in AuthContext
+    if (currentUser) {
+      await updateCurrentProfile({
+        companySettings: updated,
+        companyName: updated.companyName,
+      });
+    }
+
+    // Persist to user-specific Firestore document users/{uid}
+    const targetUid = auth?.currentUser?.uid || currentUser?.uid;
+    if (isConfigured && db && targetUid) {
+      const userDocRef = doc(db, 'users', targetUid);
+      await setDoc(
+        userDocRef,
+        {
+          companySettings: updated,
+          companyName: updated.companyName,
+          updatedAt: updated.updatedAt,
+        },
+        { merge: true }
+      );
     }
   };
 
@@ -413,8 +457,10 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const addCustomer = async (custData: Omit<Customer, 'id' | 'createdAt' | 'updatedAt'>): Promise<Customer> => {
+    const creator = auth?.currentUser?.uid || currentUser?.uid || 'user';
     const newCust: Customer = {
       ...custData,
+      createdBy: (custData as any).createdBy || creator,
       id: 'cust_' + Date.now(),
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
@@ -422,6 +468,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setCustomers((prev) => {
       const updated = [newCust, ...prev];
       saveLocal('customers', updated);
+      if (creator) saveLocal(`customers_${creator}`, updated);
       return updated;
     });
     logActivity('Customer Created', 'Customers', newCust.customerId, { customerName: newCust.customerName });
@@ -461,8 +508,10 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const addProduct = async (prodData: Omit<Product, 'id' | 'createdAt' | 'updatedAt'>): Promise<Product> => {
+    const creator = auth?.currentUser?.uid || currentUser?.uid || 'user';
     const newProd: Product = {
       ...prodData,
+      createdBy: (prodData as any).createdBy || creator,
       id: 'prod_' + Date.now(),
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
@@ -470,6 +519,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setProducts((prev) => {
       const updated = [newProd, ...prev];
       saveLocal('products', updated);
+      if (creator) saveLocal(`products_${creator}`, updated);
       return updated;
     });
     logActivity('Product Created', 'Products', newProd.productId, { name: newProd.name });
@@ -509,8 +559,10 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const addInvoice = async (invoiceData: Omit<Invoice, 'id' | 'createdAt' | 'updatedAt'>): Promise<Invoice> => {
+    const creator = invoiceData.createdBy || auth?.currentUser?.uid || currentUser?.uid || 'user';
     const newInv: Invoice = {
       ...invoiceData,
+      createdBy: creator,
       id: 'inv_' + Date.now(),
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
@@ -518,6 +570,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setInvoices((prev) => {
       const updated = [newInv, ...prev];
       saveLocal('invoices', updated);
+      if (creator) saveLocal(`invoices_${creator}`, updated);
       return updated;
     });
     logActivity('Invoice Created', 'Invoices', newInv.invoiceNumber, {
@@ -596,8 +649,10 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const addPayment = async (paymentData: Omit<Payment, 'id' | 'createdAt'>): Promise<Payment> => {
+    const creator = (paymentData as any).createdBy || auth?.currentUser?.uid || currentUser?.uid || 'user';
     const newPay: Payment = {
       ...paymentData,
+      createdBy: creator,
       id: 'pay_' + Date.now(),
       createdAt: new Date().toISOString(),
     };
@@ -606,6 +661,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setPayments((prev) => {
       const updated = [newPay, ...prev];
       saveLocal('payments', updated);
+      if (creator) saveLocal(`payments_${creator}`, updated);
       return updated;
     });
 
