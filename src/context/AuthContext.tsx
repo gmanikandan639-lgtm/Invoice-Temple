@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { UserProfile, UserRole } from '../types';
 import { INITIAL_USERS } from '../data/initialData';
-import { auth, db, isConfigured, handleFirestoreError, OperationType } from '../lib/firebase';
+import { auth, db, isConfigured, handleFirestoreError, OperationType, sanitizeForFirestore } from '../lib/firebase';
 import {
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
@@ -124,7 +124,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                     lastLoginAt: new Date().toISOString(),
                   };
                   try {
-                    await setDoc(userDocRef, newProfile, { merge: true });
+                    await setDoc(userDocRef, sanitizeForFirestore(newProfile), { merge: true });
                   } catch (e) {
                     console.warn('Initial user profile write fallback:', e);
                   }
@@ -590,7 +590,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           payload.status = updated.status;
         }
 
-        await setDoc(userDocRef, payload, { merge: true });
+        await setDoc(userDocRef, sanitizeForFirestore(payload), { merge: true });
       } catch (err: any) {
         handleFirestoreError(err, OperationType.UPDATE, `users/${currentUser.uid}`);
       }

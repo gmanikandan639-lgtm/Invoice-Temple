@@ -23,7 +23,7 @@ import {
   INITIAL_NOTIFICATIONS,
   INITIAL_ACTIVITY_LOGS,
 } from '../data/initialData';
-import { auth, db, isConfigured, handleFirestoreError, OperationType } from '../lib/firebase';
+import { auth, db, isConfigured, handleFirestoreError, OperationType, sanitizeForFirestore } from '../lib/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 import {
   collection,
@@ -358,17 +358,38 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
   }, [currentUser?.role]);
 
-  const logActivity = (action: string, module: string, recordId?: string, metadata?: Record<string, any>) => {
+  const logActivity = (
+    action: string,
+    module: string,
+    recordId?: string | null,
+    metadata?: Record<string, any> | null
+  ) => {
+    const currentUid = auth?.currentUser?.uid || currentUser?.uid || 'system';
+    const currentName = currentUser?.displayName || currentUser?.name || auth?.currentUser?.displayName || 'User';
+
+    const cleanRecordId =
+      typeof recordId === 'string' && recordId.trim().length > 0 ? recordId.trim() : undefined;
+
     const newLog: ActivityLog = {
-      id: 'act_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
-      userId: currentUser?.uid || 'system',
-      userName: currentUser?.name || 'System',
-      action,
-      module,
-      recordId,
+      id: 'act_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
+      userId: currentUid,
+      userName: currentName,
+      action: action.trim(),
+      module: module.trim(),
       timestamp: new Date().toISOString(),
-      metadata,
     };
+
+    if (cleanRecordId) {
+      newLog.recordId = cleanRecordId;
+    }
+
+    if (metadata && typeof metadata === 'object') {
+      const cleanMeta = sanitizeForFirestore(metadata);
+      if (Object.keys(cleanMeta).length > 0) {
+        newLog.metadata = cleanMeta;
+      }
+    }
+
     setActivityLogs((prev) => {
       const updated = [newLog, ...prev].slice(0, 150);
       saveLocal('activity_logs', updated);
@@ -376,7 +397,25 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     });
 
     if (isConfigured && db && auth?.currentUser) {
-      setDoc(doc(db, 'activityLogs', newLog.id), newLog).catch((err) =>
+      // Build safe Firestore payload strictly omitting any undefined fields
+      const firestorePayload: Record<string, any> = {
+        id: newLog.id,
+        userId: newLog.userId,
+        userName: newLog.userName,
+        action: newLog.action,
+        module: newLog.module,
+        timestamp: newLog.timestamp,
+      };
+
+      if (cleanRecordId) {
+        firestorePayload.recordId = cleanRecordId;
+      }
+
+      if (newLog.metadata && Object.keys(newLog.metadata).length > 0) {
+        firestorePayload.metadata = newLog.metadata;
+      }
+
+      setDoc(doc(db, 'activityLogs', newLog.id), firestorePayload).catch((err) =>
         handleFirestoreError(err, OperationType.CREATE, `activityLogs/${newLog.id}`)
       );
     }
@@ -406,12 +445,18 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const updated = { ...newSettings, updatedAt: new Date().toISOString() };
     setCompanySettings(updated);
 
+    const targetUid = auth?.currentUser?.uid || currentUser?.uid;
+
     // Save to user-specific local storage
-    if (currentUser?.uid) {
-      saveLocal(`company_settings_${currentUser.uid}`, updated);
+    if (targetUid) {
+      saveLocal(`company_settings_${targetUid}`, updated);
     }
     saveLocal('company_settings', updated);
-    logActivity('Company Settings Updated', 'Settings');
+
+    // Save activity log with authenticated user UID as recordId and company details in metadata
+    logActivity('Company Settings Updated', 'Settings', targetUid || 'company_profile', {
+      companyName: updated.companyName || 'My Company',
+    });
 
     // Update the currentUser profile in AuthContext
     if (currentUser) {
@@ -422,18 +467,14 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
 
     // Persist to user-specific Firestore document users/{uid}
-    const targetUid = auth?.currentUser?.uid || currentUser?.uid;
     if (isConfigured && db && targetUid) {
       const userDocRef = doc(db, 'users', targetUid);
-      await setDoc(
-        userDocRef,
-        {
-          companySettings: updated,
-          companyName: updated.companyName,
-          updatedAt: updated.updatedAt,
-        },
-        { merge: true }
-      );
+      const safePayload = sanitizeForFirestore({
+        companySettings: sanitizeForFirestore(updated),
+        companyName: updated.companyName || '',
+        updatedAt: updated.updatedAt,
+      });
+      await setDoc(userDocRef, safePayload, { merge: true });
     }
   };
 
@@ -445,11 +486,15 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
     setInvoiceSettings(updated);
     saveLocal('invoice_settings', updated);
-    logActivity('Invoice Settings Updated', 'Settings');
+
+    const targetUid = auth?.currentUser?.uid || currentUser?.uid;
+    logActivity('Invoice Settings Updated', 'Settings', targetUid || 'invoice_settings', {
+      prefix: updated.invoicePrefix || 'INV',
+    });
 
     if (isConfigured && db) {
       try {
-        await setDoc(doc(db, 'settings', 'invoice'), updated, { merge: true });
+        await setDoc(doc(db, 'settings', 'invoice'), sanitizeForFirestore(updated), { merge: true });
       } catch (err) {
         console.warn('Failed to update invoice settings in Firestore:', err);
       }
@@ -474,7 +519,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     logActivity('Customer Created', 'Customers', newCust.customerId, { customerName: newCust.customerName });
 
     if (isConfigured && db && auth?.currentUser) {
-      await setDoc(doc(db, 'customers', newCust.id), newCust);
+      await setDoc(doc(db, 'customers', newCust.id), sanitizeForFirestore(newCust));
     }
     return newCust;
   };
@@ -489,7 +534,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     logActivity('Customer Updated', 'Customers', id);
 
     if (isConfigured && db && auth?.currentUser) {
-      await updateDoc(doc(db, 'customers', id), { ...data, updatedAt: now });
+      await updateDoc(doc(db, 'customers', id), sanitizeForFirestore({ ...data, updatedAt: now }));
     }
   };
 
@@ -525,7 +570,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     logActivity('Product Created', 'Products', newProd.productId, { name: newProd.name });
 
     if (isConfigured && db && auth?.currentUser) {
-      await setDoc(doc(db, 'products', newProd.id), newProd);
+      await setDoc(doc(db, 'products', newProd.id), sanitizeForFirestore(newProd));
     }
     return newProd;
   };
@@ -540,7 +585,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     logActivity('Product Updated', 'Products', id);
 
     if (isConfigured && db && auth?.currentUser) {
-      await updateDoc(doc(db, 'products', id), { ...data, updatedAt: now });
+      await updateDoc(doc(db, 'products', id), sanitizeForFirestore({ ...data, updatedAt: now }));
     }
   };
 
@@ -596,8 +641,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     });
 
     if (isConfigured && db && auth?.currentUser) {
-      await setDoc(doc(db, 'invoices', newInv.id), newInv);
-      await setDoc(doc(db, 'notifications', notif.id), notif);
+      await setDoc(doc(db, 'invoices', newInv.id), sanitizeForFirestore(newInv));
+      await setDoc(doc(db, 'notifications', notif.id), sanitizeForFirestore(notif));
     }
     return newInv;
   };
@@ -612,7 +657,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     logActivity('Invoice Updated', 'Invoices', id);
 
     if (isConfigured && db && auth?.currentUser) {
-      await updateDoc(doc(db, 'invoices', id), { ...data, updatedAt: now });
+      await updateDoc(doc(db, 'invoices', id), sanitizeForFirestore({ ...data, updatedAt: now }));
     }
   };
 
@@ -633,10 +678,11 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       saveLocal('invoices', updated);
       return updated;
     });
-    logActivity('Invoice Cancelled', 'Invoices', inv?.invoiceNumber, { reason });
+    const targetRecordId = inv?.invoiceNumber || id;
+    logActivity('Invoice Cancelled', 'Invoices', targetRecordId, reason ? { reason } : undefined);
 
     if (isConfigured && db && auth?.currentUser) {
-      await updateDoc(doc(db, 'invoices', id), cancelData);
+      await updateDoc(doc(db, 'invoices', id), sanitizeForFirestore(cancelData));
     }
   };
 
@@ -688,7 +734,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       });
 
       if (isConfigured && db && auth?.currentUser) {
-        await updateDoc(doc(db, 'invoices', targetInv.id), invoiceUpdate);
+        await updateDoc(doc(db, 'invoices', targetInv.id), sanitizeForFirestore(invoiceUpdate));
       }
     }
 
@@ -716,8 +762,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     });
 
     if (isConfigured && db && auth?.currentUser) {
-      await setDoc(doc(db, 'payments', newPay.id), newPay);
-      await setDoc(doc(db, 'notifications', notif.id), notif);
+      await setDoc(doc(db, 'payments', newPay.id), sanitizeForFirestore(newPay));
+      await setDoc(doc(db, 'notifications', notif.id), sanitizeForFirestore(notif));
     }
     return newPay;
   };
@@ -742,7 +788,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     logActivity('User Created', 'Users', newUser.email, { role: newUser.role });
 
     if (isConfigured && db && auth?.currentUser) {
-      await setDoc(doc(db, 'users', newUser.uid), newUser);
+      await setDoc(doc(db, 'users', newUser.uid), sanitizeForFirestore(newUser));
     }
     return newUser;
   };
@@ -757,7 +803,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     logActivity('User Updated', 'Users', uid);
 
     if (isConfigured && db && auth?.currentUser) {
-      await updateDoc(doc(db, 'users', uid), { ...data, updatedAt: now });
+      await updateDoc(doc(db, 'users', uid), sanitizeForFirestore({ ...data, updatedAt: now }));
     }
   };
 
@@ -837,7 +883,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     saveLocal('payments', []);
     saveLocal('activity_logs', []);
     saveLocal('notifications', []);
-    logActivity('All Dummy Bills and Records Cleared', 'System');
+    const targetUid = auth?.currentUser?.uid || currentUser?.uid;
+    logActivity('All Dummy Bills and Records Cleared', 'System', targetUid || 'system_cleanup');
   };
 
   const resetDemoData = () => {
@@ -859,7 +906,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     saveLocal('activity_logs', INITIAL_ACTIVITY_LOGS);
     saveLocal('company_settings', DEFAULT_COMPANY_SETTINGS);
     saveLocal('invoice_settings', DEFAULT_INVOICE_SETTINGS);
-    logActivity('Demo Data Reset to Defaults', 'System');
+    const targetUid = auth?.currentUser?.uid || currentUser?.uid;
+    logActivity('Demo Data Reset to Defaults', 'System', targetUid || 'system_reset');
   };
 
   const unreadNotificationCount = notifications.filter((n) => !n.isRead).length;

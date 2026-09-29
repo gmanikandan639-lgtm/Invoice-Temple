@@ -135,3 +135,28 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
     console.warn(`Firestore notice (${operationType} at ${path}):`, errMsg);
   }
 }
+
+/**
+ * Recursively removes undefined fields from an object or array so Firestore setDoc/updateDoc
+ * will never fail with "Unsupported field value: undefined".
+ * Preserves false, 0, null, and empty strings.
+ */
+export function sanitizeForFirestore<T>(data: T): T {
+  if (data === null || data === undefined) {
+    return data;
+  }
+  if (Array.isArray(data)) {
+    return data.map((item) => sanitizeForFirestore(item)) as unknown as T;
+  }
+  if (typeof data === 'object' && !(data instanceof Date)) {
+    const result: Record<string, any> = {};
+    for (const [key, value] of Object.entries(data)) {
+      if (value !== undefined) {
+        result[key] = sanitizeForFirestore(value);
+      }
+    }
+    return result as T;
+  }
+  return data;
+}
+
