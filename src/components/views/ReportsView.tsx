@@ -15,6 +15,7 @@ import { useData } from '../../context/DataContext';
 import { useAuth } from '../../context/AuthContext';
 import { formatCurrency, formatDate } from '../../utils/formatters';
 import { useToast } from '../common/Toast';
+import { getUserDisplayName } from '../../types';
 
 type ReportType =
   | 'sales'
@@ -122,21 +123,39 @@ export const ReportsView: React.FC = () => {
     showToast('Report downloaded as CSV');
   };
 
+  // User ID to Display Name mapping for accurate user mapping based on authenticated Firebase UID
+  const userMap = useMemo(() => {
+    const map = new Map<string, string>();
+    users.forEach((u) => {
+      const displayName = getUserDisplayName(u);
+      if (u.uid) map.set(u.uid, displayName);
+      if (u.id) map.set(u.id, displayName);
+      if (u.email) map.set(u.email, displayName);
+    });
+    return map;
+  }, [users]);
+
   // Report 1: Sales Report
   const salesReportData = useMemo(() => {
-    return filteredInvoices.map((inv) => ({
-      invoiceNumber: inv.invoiceNumber,
-      company: inv.companySnapshot?.companyName || companySettings.companyName || 'N/A',
-      date: inv.invoiceDate,
-      customer: inv.customerSnapshot?.customerName || 'N/A',
-      taxable: inv.taxableAmount,
-      gst: inv.cgst + inv.sgst + inv.igst,
-      total: inv.grandTotal,
-      paid: inv.amountPaid,
-      balance: inv.balanceAmount,
-      status: inv.paymentStatus,
-    }));
-  }, [filteredInvoices, companySettings.companyName]);
+    return filteredInvoices.map((inv) => {
+      const ownerUid = inv.createdBy || inv.userId || '';
+      const resolvedUserName = (ownerUid && userMap.get(ownerUid)) || inv.createdByName || 'User';
+
+      return {
+        invoiceNumber: inv.invoiceNumber,
+        userName: resolvedUserName,
+        company: inv.companySnapshot?.companyName || inv.companyName || companySettings.companyName || 'N/A',
+        customer: inv.customerSnapshot?.customerName || 'N/A',
+        date: inv.invoiceDate,
+        taxable: inv.taxableAmount,
+        gst: inv.cgst + inv.sgst + inv.igst,
+        total: inv.grandTotal,
+        paid: inv.amountPaid,
+        balance: inv.balanceAmount,
+        status: inv.paymentStatus,
+      };
+    });
+  }, [filteredInvoices, userMap, companySettings.companyName]);
 
   // Report 2: GST Rate-wise summary (GSTR-1 summary)
   const gstTaxSummary = useMemo(() => {
@@ -237,7 +256,8 @@ export const ReportsView: React.FC = () => {
   const userPerformance = useMemo(() => {
     const map: Record<string, { name: string; count: number; sales: number; paid: number }> = {};
     filteredInvoices.forEach((inv) => {
-      const u = inv.createdByName || 'Staff';
+      const ownerUid = inv.createdBy || inv.userId || '';
+      const u = (ownerUid && userMap.get(ownerUid)) || inv.createdByName || 'Staff';
       if (!map[u]) {
         map[u] = { name: u, count: 0, sales: 0, paid: 0 };
       }
@@ -246,7 +266,7 @@ export const ReportsView: React.FC = () => {
       map[u].paid += inv.amountPaid;
     });
     return Object.values(map);
-  }, [filteredInvoices]);
+  }, [filteredInvoices, userMap]);
 
   // Report 10: State-wise summary
   const stateSummary = useMemo(() => {
@@ -267,13 +287,13 @@ export const ReportsView: React.FC = () => {
   const handleExportCSV = () => {
     if (activeReport === 'sales') {
       const headers = isAdmin
-        ? ['Invoice No', 'Company', 'Date', 'Customer', 'Taxable (INR)', 'GST (INR)', 'Total (INR)', 'Paid (INR)', 'Balance (INR)', 'Status']
-        : ['Invoice No', 'Date', 'Customer', 'Taxable (INR)', 'GST (INR)', 'Total (INR)', 'Paid (INR)', 'Balance (INR)', 'Status'];
+        ? ['Invoice No.', 'User Name', 'Company', 'Customer', 'Invoice Date', 'Taxable Amount (INR)', 'Tax (INR)', 'Total Amount (INR)', 'Collected (INR)', 'Balance (INR)', 'Status']
+        : ['Invoice No.', 'User Name', 'Customer', 'Invoice Date', 'Taxable Amount (INR)', 'Tax (INR)', 'Total Amount (INR)', 'Collected (INR)', 'Balance (INR)', 'Status'];
 
       const rows = salesReportData.map((r) =>
         isAdmin
-          ? [r.invoiceNumber, r.company, r.date, r.customer, r.taxable, r.gst, r.total, r.paid, r.balance, r.status]
-          : [r.invoiceNumber, r.date, r.customer, r.taxable, r.gst, r.total, r.paid, r.balance, r.status]
+          ? [r.invoiceNumber, r.userName, r.company, r.customer, r.date, r.taxable, r.gst, r.total, r.paid, r.balance, r.status]
+          : [r.invoiceNumber, r.userName, r.customer, r.date, r.taxable, r.gst, r.total, r.paid, r.balance, r.status]
       );
 
       exportToCSV(`sales_report_${period}`, headers, rows);
@@ -417,13 +437,14 @@ export const ReportsView: React.FC = () => {
             <table className="w-full text-left text-xs">
               <thead className="bg-slate-50 text-slate-500 font-semibold uppercase tracking-wider text-[10px] border-b border-slate-100">
                 <tr>
-                  <th className="px-4 py-3">Invoice No</th>
+                  <th className="px-4 py-3">Invoice No.</th>
+                  <th className="px-4 py-3">User Name</th>
                   {isAdmin && <th className="px-4 py-3">Company</th>}
-                  <th className="px-4 py-3">Date</th>
                   <th className="px-4 py-3">Customer</th>
-                  <th className="px-4 py-3 text-right">Taxable</th>
-                  <th className="px-4 py-3 text-right">Total GST</th>
-                  <th className="px-4 py-3 text-right">Grand Total</th>
+                  <th className="px-4 py-3">Invoice Date</th>
+                  <th className="px-4 py-3 text-right">Taxable Amount</th>
+                  <th className="px-4 py-3 text-right">Tax</th>
+                  <th className="px-4 py-3 text-right">Total Amount</th>
                   <th className="px-4 py-3 text-right">Collected</th>
                   <th className="px-4 py-3 text-right">Balance</th>
                   <th className="px-4 py-3 text-center">Status</th>
@@ -432,7 +453,7 @@ export const ReportsView: React.FC = () => {
               <tbody className="divide-y divide-slate-100">
                 {salesReportData.length === 0 ? (
                   <tr>
-                    <td colSpan={isAdmin ? 10 : 9} className="px-4 py-8 text-center text-slate-400">
+                    <td colSpan={isAdmin ? 11 : 10} className="px-4 py-8 text-center text-slate-400">
                       No invoices found for this date range.
                     </td>
                   </tr>
@@ -440,11 +461,12 @@ export const ReportsView: React.FC = () => {
                   salesReportData.map((r, i) => (
                     <tr key={i} className="hover:bg-slate-50">
                       <td className="px-4 py-3 font-bold text-slate-900">{r.invoiceNumber}</td>
+                      <td className="px-4 py-3 font-semibold text-slate-800">{r.userName}</td>
                       {isAdmin && (
                         <td className="px-4 py-3 font-semibold text-amber-800 text-xs">{r.company}</td>
                       )}
-                      <td className="px-4 py-3 text-slate-600">{formatDate(r.date)}</td>
                       <td className="px-4 py-3 font-semibold text-slate-800">{r.customer}</td>
+                      <td className="px-4 py-3 text-slate-600">{formatDate(r.date)}</td>
                       <td className="px-4 py-3 text-right">{formatCurrency(r.taxable)}</td>
                       <td className="px-4 py-3 text-right text-sky-700">{formatCurrency(r.gst)}</td>
                       <td className="px-4 py-3 text-right font-bold text-slate-900">{formatCurrency(r.total)}</td>
