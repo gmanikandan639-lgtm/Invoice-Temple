@@ -119,6 +119,10 @@ export const InvoiceCreateView: React.FC<InvoiceCreateViewProps> = ({
   const showDiscount = invoiceSettings.showDiscount !== false;
   const showShipping = invoiceSettings.showShipping !== false;
   const showGst = invoiceSettings.showGst !== false;
+  const showTax = invoiceSettings.showTax !== false && showGst;
+  const showRoundOff = invoiceSettings.showRoundOff !== false;
+  const showPaid = invoiceSettings.showPaid !== false;
+  const showBalanceDue = invoiceSettings.showBalanceDue !== false;
 
   // Items State
   const [items, setItems] = useState<InvoiceItem[]>([
@@ -275,7 +279,7 @@ export const InvoiceCreateView: React.FC<InvoiceCreateViewProps> = ({
     setItems((prev) => prev.filter((_, i) => i !== index));
   };
 
-  // Totals Calculation according to authoritative formula: Subtotal - Discount + Shipping + Tax = Grand Total
+  // Totals Calculation according to authoritative formula: Subtotal - Discount + Tax + Shipping +/- Round Off = Grand Total
   const totals = useMemo(() => {
     let subtotal = 0;
     items.forEach((it) => {
@@ -288,26 +292,46 @@ export const InvoiceCreateView: React.FC<InvoiceCreateViewProps> = ({
     // Apply show/hide setting constraints:
     // If disabled in settings, value is 0 and not applied/added
     const discount = showDiscount ? Math.min(subtotal, Math.max(0, Number(invoiceDiscount) || 0)) : 0;
-    const shipping = showShipping ? Math.max(0, Number(invoiceShipping) || 0) : 0;
     const tax = showGst ? Math.max(0, Number(invoiceTax) || 0) : 0;
+    const shipping = showShipping ? Math.max(0, Number(invoiceShipping) || 0) : 0;
 
-    // Exact financial relationship: Subtotal - Discount Amount + Shipping + Tax = Grand Total
-    const grandTotal = Math.max(0, Math.round((subtotal - discount + shipping + tax) * 100) / 100);
+    // Subtotal - Discount + Tax + Shipping
+    const preRoundTotal = Math.max(0, Math.round((subtotal - discount + tax + shipping) * 100) / 100);
+
+    const autoRound = invoiceSettings.autoRoundOff !== false && companySettings.enableRoundOff !== false;
+    let roundOff = 0;
+    let grandTotal = preRoundTotal;
+
+    if (autoRound) {
+      grandTotal = Math.round(preRoundTotal);
+      roundOff = Math.round((grandTotal - preRoundTotal) * 100) / 100;
+    }
+
     const taxableAmount = Math.max(0, Math.round((subtotal - discount) * 100) / 100);
 
     return {
       subtotal,
       discount,
-      shipping,
       tax,
+      shipping,
+      roundOff,
       taxableAmount,
       cgst: 0,
       sgst: 0,
       igst: tax,
-      roundOff: 0,
       grandTotal,
     };
-  }, [items, invoiceDiscount, invoiceShipping, invoiceTax, showDiscount, showShipping, showGst]);
+  }, [
+    items,
+    invoiceDiscount,
+    invoiceTax,
+    invoiceShipping,
+    showDiscount,
+    showShipping,
+    showGst,
+    invoiceSettings.autoRoundOff,
+    companySettings.enableRoundOff,
+  ]);
 
   // Quick Customer Creation
   const handleQuickCustomerSubmit = async (e: React.FormEvent) => {
@@ -1410,7 +1434,6 @@ export const InvoiceCreateView: React.FC<InvoiceCreateViewProps> = ({
                   <p><strong className="text-slate-900">Invoice Date:</strong> {formatInvoiceDate(invoiceDate)}</p>
                   <p><strong className="text-slate-900">Due Date:</strong> {formatInvoiceDate(dueDate)}</p>
                   <p><strong className="text-slate-900">Delivery Note:</strong> {deliveryNote || '-'}</p>
-                  <p><strong className="text-slate-900">Place of Supply:</strong> {placeOfSupply}</p>
                 </div>
               </div>
             </div>
@@ -1467,26 +1490,40 @@ export const InvoiceCreateView: React.FC<InvoiceCreateViewProps> = ({
                     <span>-{formatCurrency(totals.discount)}</span>
                   </div>
                 )}
+                {showTax && totals.tax > 0 && (
+                  <div className="flex justify-between text-slate-700 font-semibold">
+                    <span>Tax</span>
+                    <span>{formatCurrency(totals.tax)}</span>
+                  </div>
+                )}
                 {showShipping && totals.shipping > 0 && (
                   <div className="flex justify-between text-slate-700 font-semibold">
                     <span>Shipping</span>
                     <span>{formatCurrency(totals.shipping)}</span>
                   </div>
                 )}
-                {showGst && totals.tax > 0 && (
-                  <div className="flex justify-between text-slate-700 font-semibold">
-                    <span>Tax</span>
-                    <span>{formatCurrency(totals.tax)}</span>
+                {showRoundOff && (
+                  <div className="flex justify-between text-slate-500 font-semibold">
+                    <span>Round Off</span>
+                    <span>
+                      {totals.roundOff < 0 ? `-${formatCurrency(Math.abs(totals.roundOff))}` : formatCurrency(totals.roundOff || 0)}
+                    </span>
                   </div>
                 )}
                 <div className="flex justify-between text-base font-black text-slate-900 pt-2 border-t-2 border-slate-900">
                   <span>Grand Total</span>
                   <span className="text-amber-600 font-black">{formatCurrency(totals.grandTotal)}</span>
                 </div>
-                {recordInitialPayment && initialPaymentAmount > 0 && (
+                {showPaid && (
+                  <div className="flex justify-between text-xs font-semibold text-emerald-700 pt-1">
+                    <span>Paid</span>
+                    <span>{formatCurrency(recordInitialPayment ? Number(initialPaymentAmount) || 0 : 0)}</span>
+                  </div>
+                )}
+                {showBalanceDue && (
                   <div className="flex justify-between text-xs font-semibold text-rose-600 pt-1">
                     <span>Balance Due</span>
-                    <span>{formatCurrency(Math.max(0, totals.grandTotal - initialPaymentAmount))}</span>
+                    <span>{formatCurrency(Math.max(0, totals.grandTotal - (recordInitialPayment ? Number(initialPaymentAmount) || 0 : 0)))}</span>
                   </div>
                 )}
               </div>

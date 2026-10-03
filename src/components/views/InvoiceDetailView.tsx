@@ -44,6 +44,10 @@ export const InvoiceDetailView: React.FC<InvoiceDetailViewProps> = ({
     showDiscount = true,
     showShipping = true,
     showGst = true,
+    showTax = true,
+    showRoundOff = true,
+    showPaid = true,
+    showBalanceDue = true,
     showDueDate = true,
     showNotes = true,
     showTerms = true,
@@ -54,6 +58,11 @@ export const InvoiceDetailView: React.FC<InvoiceDetailViewProps> = ({
 
   const invoice = invoices.find((inv) => inv.id === invoiceId);
   const effectiveCompany = invoice?.companySnapshot || companySettings;
+
+  const taxAmount = invoice
+    ? (invoice.tax !== undefined ? invoice.tax : (invoice.cgst + invoice.sgst + invoice.igst || 0))
+    : 0;
+  const isTaxEnabled = showGst !== false && showTax !== false;
 
   // Template switch state
   const [template, setTemplate] = useState<InvoiceTemplate>(
@@ -457,11 +466,6 @@ export const InvoiceDetailView: React.FC<InvoiceDetailViewProps> = ({
                       <strong className="text-slate-900">Delivery Note:</strong> {invoice.deliveryNote}
                     </p>
                   )}
-                  {invoice.placeOfSupply && (
-                    <p>
-                      <strong className="text-slate-900">Place of Supply:</strong> {invoice.placeOfSupply}
-                    </p>
-                  )}
                 </div>
               </div>
             </div>
@@ -604,33 +608,35 @@ export const InvoiceDetailView: React.FC<InvoiceDetailViewProps> = ({
                   <span className="font-semibold text-slate-800">{formatCurrency(invoice.subtotal)}</span>
                 </div>
 
-                {showDiscount && (invoice.discount > 0 || (invoiceSettings?.showDiscount !== false && invoice.discount > 0)) && (
+                {showDiscount && (invoice.discount > 0 || invoiceSettings?.showDiscount !== false && invoice.discount > 0) && (
                   <div className="flex justify-between py-1 border-b border-slate-100 text-amber-600">
                     <span>Discount</span>
                     <span className="font-semibold">-{formatCurrency(invoice.discount)}</span>
                   </div>
                 )}
 
-                {showShipping && ((invoice.shipping || 0) > 0 || (invoiceSettings?.showShipping !== false && (invoice.shipping || 0) > 0)) && (
+                {isTaxEnabled && (taxAmount > 0 || (invoice.cgst + invoice.sgst + invoice.igst > 0) || invoiceSettings?.showTax !== false) && (
+                  <div className="flex justify-between py-1 border-b border-slate-100 text-slate-700">
+                    <span>Tax</span>
+                    <span className="font-semibold">
+                      {formatCurrency(taxAmount)}
+                    </span>
+                  </div>
+                )}
+
+                {showShipping && ((invoice.shipping || 0) > 0) && (
                   <div className="flex justify-between py-1 border-b border-slate-100 text-slate-700">
                     <span>Shipping</span>
                     <span className="font-semibold">{formatCurrency(invoice.shipping || 0)}</span>
                   </div>
                 )}
 
-                {showGst && ((invoice.tax !== undefined ? invoice.tax : (invoice.cgst + invoice.sgst + invoice.igst || 0)) > 0) && (
-                  <div className="flex justify-between py-1 border-b border-slate-100 text-slate-700">
-                    <span>Tax</span>
-                    <span className="font-semibold">
-                      {formatCurrency(invoice.tax !== undefined ? invoice.tax : (invoice.cgst + invoice.sgst + invoice.igst || 0))}
-                    </span>
-                  </div>
-                )}
-
-                {invoice.roundOff !== 0 && (
+                {showRoundOff && (
                   <div className="flex justify-between py-1 border-b border-slate-100 text-slate-500">
-                    <span>Round Off:</span>
-                    <span>{formatCurrency(invoice.roundOff)}</span>
+                    <span>Round Off</span>
+                    <span className="font-semibold">
+                      {invoice.roundOff < 0 ? `-${formatCurrency(Math.abs(invoice.roundOff))}` : formatCurrency(invoice.roundOff || 0)}
+                    </span>
                   </div>
                 )}
 
@@ -639,17 +645,19 @@ export const InvoiceDetailView: React.FC<InvoiceDetailViewProps> = ({
                   <span className="text-base text-slate-900">{formatCurrency(invoice.grandTotal)}</span>
                 </div>
 
-                {invoice.amountPaid > 0 && (
+                {showPaid && (
                   <div className="flex justify-between py-1 text-emerald-700">
-                    <span>Amount Paid</span>
-                    <span className="font-semibold">{formatCurrency(invoice.amountPaid)}</span>
+                    <span>Paid</span>
+                    <span className="font-semibold">{formatCurrency(invoice.amountPaid || 0)}</span>
                   </div>
                 )}
 
-                <div className="flex justify-between py-1 text-slate-900 font-bold bg-amber-50 px-2 rounded-lg">
-                  <span>Balance Due</span>
-                  <span>{formatCurrency(invoice.balanceAmount)}</span>
-                </div>
+                {showBalanceDue && (
+                  <div className="flex justify-between py-1 text-slate-900 font-bold bg-amber-50 px-2 rounded-lg">
+                    <span>Balance Due</span>
+                    <span>{formatCurrency(invoice.balanceAmount ?? Math.max(0, invoice.grandTotal - (invoice.amountPaid || 0)))}</span>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -753,7 +761,6 @@ export const InvoiceDetailView: React.FC<InvoiceDetailViewProps> = ({
                 <p><strong className="text-slate-900">Invoice Date:</strong> {formatInvoiceDate(invoice.invoiceDate)}</p>
                 {showDueDate && <p><strong className="text-slate-900">Due Date:</strong> {formatInvoiceDate(invoice.dueDate)}</p>}
                 {invoice.deliveryNote && <p><strong className="text-slate-900">Delivery Note:</strong> {invoice.deliveryNote}</p>}
-                {invoice.placeOfSupply && <p><strong className="text-slate-900">Place of Supply:</strong> {invoice.placeOfSupply}</p>}
               </div>
             </div>
 
@@ -822,32 +829,42 @@ export const InvoiceDetailView: React.FC<InvoiceDetailViewProps> = ({
                     <span>-{formatCurrency(invoice.discount)}</span>
                   </div>
                 )}
-                {showShipping && ((invoice.shipping || 0) > 0 || (invoiceSettings?.showShipping !== false && (invoice.shipping || 0) > 0)) && (
+                {isTaxEnabled && (taxAmount > 0 || (invoice.cgst + invoice.sgst + invoice.igst > 0) || invoiceSettings?.showTax !== false) && (
+                  <div className="flex justify-between text-slate-700 font-semibold">
+                    <span>Tax</span>
+                    <span>{formatCurrency(taxAmount)}</span>
+                  </div>
+                )}
+                {showShipping && ((invoice.shipping || 0) > 0) && (
                   <div className="flex justify-between text-slate-700 font-semibold">
                     <span>Shipping</span>
                     <span>{formatCurrency(invoice.shipping || 0)}</span>
                   </div>
                 )}
-                {showGst && ((invoice.tax !== undefined ? invoice.tax : (invoice.cgst + invoice.sgst + invoice.igst || 0)) > 0) && (
-                  <div className="flex justify-between text-slate-700 font-semibold">
-                    <span>Tax</span>
-                    <span>{formatCurrency(invoice.tax !== undefined ? invoice.tax : (invoice.cgst + invoice.sgst + invoice.igst || 0))}</span>
+                {showRoundOff && (
+                  <div className="flex justify-between text-slate-500 font-semibold">
+                    <span>Round Off</span>
+                    <span>
+                      {invoice.roundOff < 0 ? `-${formatCurrency(Math.abs(invoice.roundOff))}` : formatCurrency(invoice.roundOff || 0)}
+                    </span>
                   </div>
                 )}
                 <div className="flex justify-between text-base font-black text-slate-900 pt-2 border-t border-slate-200">
                   <span>Grand Total</span>
-                  <span className="text-amber-600">{formatCurrency(invoice.grandTotal)}</span>
+                  <span className="text-amber-600 font-black">{formatCurrency(invoice.grandTotal)}</span>
                 </div>
-                {invoice.amountPaid > 0 && (
+                {showPaid && (
                   <div className="flex justify-between text-xs font-semibold text-emerald-700 pt-1">
-                    <span>Amount Paid</span>
-                    <span>{formatCurrency(invoice.amountPaid)}</span>
+                    <span>Paid</span>
+                    <span>{formatCurrency(invoice.amountPaid || 0)}</span>
                   </div>
                 )}
-                <div className="flex justify-between text-xs font-semibold text-slate-700 pt-1">
-                  <span>Balance Due</span>
-                  <span className="text-rose-600">{formatCurrency(invoice.balanceAmount)}</span>
-                </div>
+                {showBalanceDue && (
+                  <div className="flex justify-between text-xs font-semibold text-slate-700 pt-1">
+                    <span>Balance Due</span>
+                    <span className="text-rose-600 font-bold">{formatCurrency(invoice.balanceAmount ?? Math.max(0, invoice.grandTotal - (invoice.amountPaid || 0)))}</span>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -921,7 +938,6 @@ export const InvoiceDetailView: React.FC<InvoiceDetailViewProps> = ({
                 <p><strong>Invoice Date:</strong> {formatInvoiceDate(invoice.invoiceDate)}</p>
                 {showDueDate && <p><strong>Due Date:</strong> {formatInvoiceDate(invoice.dueDate)}</p>}
                 {invoice.deliveryNote && <p><strong>Delivery Note:</strong> {invoice.deliveryNote}</p>}
-                {invoice.placeOfSupply && <p><strong>Place of Supply:</strong> {invoice.placeOfSupply}</p>}
               </div>
             </div>
 
@@ -972,21 +988,26 @@ export const InvoiceDetailView: React.FC<InvoiceDetailViewProps> = ({
                 {showDiscount && (invoice.discount > 0 || (invoiceSettings?.showDiscount !== false && invoice.discount > 0)) && (
                   <p className="text-amber-700">Discount: <strong>-{formatCurrency(invoice.discount)}</strong></p>
                 )}
-                {showShipping && ((invoice.shipping || 0) > 0 || (invoiceSettings?.showShipping !== false && (invoice.shipping || 0) > 0)) && (
+                {isTaxEnabled && (taxAmount > 0 || (invoice.cgst + invoice.sgst + invoice.igst > 0) || invoiceSettings?.showTax !== false) && (
+                  <p className="text-slate-800">
+                    Tax: <strong>{formatCurrency(taxAmount)}</strong>
+                  </p>
+                )}
+                {showShipping && ((invoice.shipping || 0) > 0) && (
                   <p className="text-slate-800">Shipping: <strong>{formatCurrency(invoice.shipping || 0)}</strong></p>
                 )}
-                {showGst && ((invoice.tax !== undefined ? invoice.tax : (invoice.cgst + invoice.sgst + invoice.igst || 0)) > 0) && (
-                  <p className="text-slate-800">
-                    Tax: <strong>{formatCurrency(invoice.tax !== undefined ? invoice.tax : (invoice.cgst + invoice.sgst + invoice.igst || 0))}</strong>
-                  </p>
+                {showRoundOff && (
+                  <p className="text-slate-600">Round Off: <strong>{invoice.roundOff < 0 ? `-${formatCurrency(Math.abs(invoice.roundOff))}` : formatCurrency(invoice.roundOff || 0)}</strong></p>
                 )}
                 <p className="text-sm font-black border-t border-slate-900 pt-1">
                   Grand Total: {formatCurrency(invoice.grandTotal)}
                 </p>
-                {invoice.amountPaid > 0 && (
-                  <p className="text-emerald-700">Amount Paid: <strong>{formatCurrency(invoice.amountPaid)}</strong></p>
+                {showPaid && (
+                  <p className="text-emerald-700">Paid: <strong>{formatCurrency(invoice.amountPaid || 0)}</strong></p>
                 )}
-                <p className="text-xs font-bold text-rose-700">Balance Due: <strong>{formatCurrency(invoice.balanceAmount)}</strong></p>
+                {showBalanceDue && (
+                  <p className="text-xs font-bold text-rose-700">Balance Due: <strong>{formatCurrency(invoice.balanceAmount ?? Math.max(0, invoice.grandTotal - (invoice.amountPaid || 0)))}</strong></p>
+                )}
               </div>
             </div>
 

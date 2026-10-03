@@ -47,6 +47,10 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ initialTab = 'compan
     showDiscount: invoiceSettings?.showDiscount !== false,
     showShipping: invoiceSettings?.showShipping !== false,
     showGst: invoiceSettings?.showGst !== false,
+    showTax: invoiceSettings?.showTax !== false,
+    showRoundOff: invoiceSettings?.showRoundOff !== false,
+    showPaid: invoiceSettings?.showPaid !== false,
+    showBalanceDue: invoiceSettings?.showBalanceDue !== false,
     showLogo: invoiceSettings?.showLogo !== false,
     defaultNotes: invoiceSettings?.defaultNotes || '',
     defaultTerms: invoiceSettings?.defaultTerms || '',
@@ -66,6 +70,10 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ initialTab = 'compan
         showDiscount: invoiceSettings.showDiscount !== false,
         showShipping: invoiceSettings.showShipping !== false,
         showGst: invoiceSettings.showGst !== false,
+        showTax: invoiceSettings.showTax !== false,
+        showRoundOff: invoiceSettings.showRoundOff !== false,
+        showPaid: invoiceSettings.showPaid !== false,
+        showBalanceDue: invoiceSettings.showBalanceDue !== false,
         showLogo: invoiceSettings.showLogo !== false,
         defaultNotes: invoiceSettings.defaultNotes || '',
         defaultTerms: invoiceSettings.defaultTerms || '',
@@ -698,14 +706,77 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ initialTab = 'compan
                   <div className="pr-4">
                     <p className="text-xs font-bold text-slate-900">GST / Tax Calculation</p>
                     <p className="text-[11px] text-slate-500 mt-0.5">
-                      Calculate CGST, SGST &amp; IGST taxes on items
+                      Calculate and show taxes in invoice financial summary
                     </p>
                   </div>
                   <label className="relative inline-flex items-center cursor-pointer shrink-0">
                     <input
                       type="checkbox"
-                      checked={invSettingsData.showGst}
-                      onChange={(e) => setInvSettingsData((prev) => ({ ...prev, showGst: e.target.checked }))}
+                      checked={invSettingsData.showGst && invSettingsData.showTax !== false}
+                      onChange={(e) =>
+                        setInvSettingsData((prev) => ({
+                          ...prev,
+                          showGst: e.target.checked,
+                          showTax: e.target.checked,
+                        }))
+                      }
+                      className="sr-only peer"
+                    />
+                    <div className="w-9 h-5 bg-slate-300 peer-focus:outline-hidden rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-amber-500"></div>
+                  </label>
+                </div>
+
+                {/* Round Off */}
+                <div className="flex items-start justify-between p-3.5 rounded-xl border border-slate-200 bg-slate-50/70 hover:bg-slate-50 transition-colors">
+                  <div className="pr-4">
+                    <p className="text-xs font-bold text-slate-900">Round Off Adjustment</p>
+                    <p className="text-[11px] text-slate-500 mt-0.5">
+                      Display round off amount in invoice financial summary
+                    </p>
+                  </div>
+                  <label className="relative inline-flex items-center cursor-pointer shrink-0">
+                    <input
+                      type="checkbox"
+                      checked={invSettingsData.showRoundOff !== false}
+                      onChange={(e) => setInvSettingsData((prev) => ({ ...prev, showRoundOff: e.target.checked }))}
+                      className="sr-only peer"
+                    />
+                    <div className="w-9 h-5 bg-slate-300 peer-focus:outline-hidden rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-amber-500"></div>
+                  </label>
+                </div>
+
+                {/* Paid Amount */}
+                <div className="flex items-start justify-between p-3.5 rounded-xl border border-slate-200 bg-slate-50/70 hover:bg-slate-50 transition-colors">
+                  <div className="pr-4">
+                    <p className="text-xs font-bold text-slate-900">Paid Amount</p>
+                    <p className="text-[11px] text-slate-500 mt-0.5">
+                      Display received amount in invoice financial summary
+                    </p>
+                  </div>
+                  <label className="relative inline-flex items-center cursor-pointer shrink-0">
+                    <input
+                      type="checkbox"
+                      checked={invSettingsData.showPaid !== false}
+                      onChange={(e) => setInvSettingsData((prev) => ({ ...prev, showPaid: e.target.checked }))}
+                      className="sr-only peer"
+                    />
+                    <div className="w-9 h-5 bg-slate-300 peer-focus:outline-hidden rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-amber-500"></div>
+                  </label>
+                </div>
+
+                {/* Balance Due */}
+                <div className="flex items-start justify-between p-3.5 rounded-xl border border-slate-200 bg-slate-50/70 hover:bg-slate-50 transition-colors">
+                  <div className="pr-4">
+                    <p className="text-xs font-bold text-slate-900">Balance Due</p>
+                    <p className="text-[11px] text-slate-500 mt-0.5">
+                      Display remaining balance due in invoice financial summary
+                    </p>
+                  </div>
+                  <label className="relative inline-flex items-center cursor-pointer shrink-0">
+                    <input
+                      type="checkbox"
+                      checked={invSettingsData.showBalanceDue !== false}
+                      onChange={(e) => setInvSettingsData((prev) => ({ ...prev, showBalanceDue: e.target.checked }))}
                       className="sr-only peer"
                     />
                     <div className="w-9 h-5 bg-slate-300 peer-focus:outline-hidden rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-amber-500"></div>

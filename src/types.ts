@@ -266,9 +266,13 @@ export interface InvoiceSettings {
   // Billing Field Display Settings (Show / Hide)
   showHsnSac?: boolean; // Default false (Hide)
   showUnit?: boolean; // Default false (Hide)
-  showDiscount?: boolean; // Default false (Hide)
+  showDiscount?: boolean; // Default true (Show)
   showShipping?: boolean; // Default true (Show)
-  showGst?: boolean; // Default false (Hide)
+  showGst?: boolean; // Default true (Show)
+  showTax?: boolean; // Default true (Show)
+  showRoundOff?: boolean; // Default true (Show)
+  showPaid?: boolean; // Default true (Show)
+  showBalanceDue?: boolean; // Default true (Show)
   showCgst?: boolean; // Sub-control for CGST
   showSgst?: boolean; // Sub-control for SGST
   showIgst?: boolean; // Sub-control for IGST
