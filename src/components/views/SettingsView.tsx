@@ -11,11 +11,14 @@ import {
   ShieldCheck,
   Image as ImageIcon,
   Trash2,
+  Hash,
+  AlertCircle,
 } from 'lucide-react';
 import { useData } from '../../context/DataContext';
 import { useAuth } from '../../context/AuthContext';
 import { CompanySettings, InvoiceSettings, INDIAN_STATES } from '../../types';
 import { getStateCodeByName } from '../../utils/taxCalculator';
+import { getNextInvoiceNumberString } from '../../utils/invoiceNumbering';
 import { useToast } from '../common/Toast';
 
 interface SettingsViewProps {
@@ -23,10 +26,11 @@ interface SettingsViewProps {
 }
 
 export const SettingsView: React.FC<SettingsViewProps> = ({ initialTab = 'company' }) => {
-  const { companySettings, updateCompanySettings, invoiceSettings, updateInvoiceSettings } = useData();
+  const { companySettings, updateCompanySettings, invoiceSettings, updateInvoiceSettings, getInvoiceCountForUser } = useData();
   const { role } = useAuth();
   const { showToast } = useToast();
 
+  const existingCount = getInvoiceCountForUser();
   const [activeTab, setActiveTab] = useState<'company' | 'invoice' | 'bank' | 'layout'>(initialTab);
 
   React.useEffect(() => {
@@ -49,6 +53,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ initialTab = 'compan
     autoRoundOff: invoiceSettings?.autoRoundOff ?? true,
     prefix: invoiceSettings?.prefix || '',
     nextNumber: invoiceSettings?.nextNumber || 1,
+    startingInvoiceNumber: invoiceSettings?.startingInvoiceNumber || '',
   });
 
   const logoInputRef = useRef<HTMLInputElement>(null);
@@ -67,6 +72,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ initialTab = 'compan
         autoRoundOff: invoiceSettings.autoRoundOff ?? true,
         prefix: invoiceSettings.prefix || '',
         nextNumber: invoiceSettings.nextNumber || 1,
+        startingInvoiceNumber: invoiceSettings.startingInvoiceNumber || '',
       });
     }
   }, [invoiceSettings]);
@@ -157,6 +163,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ initialTab = 'compan
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
+
     try {
       await updateCompanySettings(formData);
       await updateInvoiceSettings(invSettingsData);
@@ -464,39 +471,90 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ initialTab = 'compan
 
         {/* ================= INVOICE TAB ================= */}
         {activeTab === 'invoice' && (
-          <div className="space-y-4">
-            <h3 className="text-xs font-extrabold uppercase tracking-wider text-slate-400">
-              Tax Invoice Sequences &amp; Terms
+          <div className="space-y-5">
+            {/* User-Wise Invoice Numbering Card */}
+            <div className="bg-gradient-to-r from-amber-50/70 to-orange-50/40 p-5 rounded-2xl border border-amber-200/90 shadow-xs">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+                <div>
+                  <h4 className="text-sm font-bold text-amber-950 flex items-center gap-2">
+                    <Hash className="w-4 h-4 text-amber-600" />
+                    Invoice Number Settings (User-Specific Sequence)
+                  </h4>
+                  <p className="text-xs text-amber-800/80 mt-0.5">
+                    Configure your personalized invoice starting number. Every user maintains their own independent sequence.
+                  </p>
+                </div>
+                {existingCount > 0 && (
+                  <span className="px-3 py-1 rounded-full text-xs font-bold bg-amber-100 text-amber-900 border border-amber-300 self-start sm:self-auto shrink-0">
+                    {existingCount} Existing Invoice{existingCount > 1 ? 's' : ''}
+                  </span>
+                )}
+              </div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-slate-800 mb-1">
+                    Starting Invoice Number *
+                  </label>
+                  <input
+                    type="text"
+                    value={invSettingsData.startingInvoiceNumber || ''}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setInvSettingsData((prev) => ({ ...prev, startingInvoiceNumber: val }));
+                    }}
+                    placeholder="e.g. 1001, INV-001, or INV-2026-001"
+                    className="w-full px-3.5 py-2.5 bg-white border border-amber-300 rounded-xl text-xs font-mono font-bold text-slate-900 focus:outline-hidden focus:ring-2 focus:ring-amber-500 shadow-2xs"
+                  />
+                  <span className="text-[11px] text-slate-500 mt-1.5 block">
+                    Enter a plain starting number (e.g. <code className="font-bold text-amber-800">1001</code>) or a custom prefix pattern (e.g. <code className="font-bold text-amber-800">INV-001</code> or <code className="font-bold text-amber-800">INV-2026-001</code>). The system will continuously increment from here.
+                  </span>
+                </div>
+
+                <div className="p-3.5 bg-white/90 rounded-xl border border-amber-200 flex flex-col justify-center text-xs shadow-2xs">
+                  <div className="text-[10px] uppercase font-extrabold text-amber-800 tracking-wider mb-2 flex items-center gap-1.5">
+                    <span>Live Sequence Preview</span>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2 font-mono font-bold text-xs text-slate-800">
+                    <span className="px-2.5 py-1 rounded-lg bg-amber-100 text-amber-900 border border-amber-300 shadow-2xs">
+                      1st: {invSettingsData.startingInvoiceNumber || 'INV-2026-00001'}
+                    </span>
+                    <span className="text-slate-400 font-normal">&rarr;</span>
+                    <span className="px-2.5 py-1 rounded-lg bg-slate-100 text-slate-800 border border-slate-200">
+                      2nd: {getNextInvoiceNumberString(invSettingsData.startingInvoiceNumber || 'INV-2026-00001', 1)}
+                    </span>
+                    <span className="text-slate-400 font-normal">&rarr;</span>
+                    <span className="px-2.5 py-1 rounded-lg bg-slate-100 text-slate-800 border border-slate-200">
+                      3rd: {getNextInvoiceNumberString(invSettingsData.startingInvoiceNumber || 'INV-2026-00001', 2)}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {existingCount > 0 && invSettingsData.startingInvoiceNumber && invSettingsData.startingInvoiceNumber !== (invoiceSettings?.startingInvoiceNumber || '') && (
+                <div className="mt-3.5 p-3 rounded-xl bg-amber-100/80 border border-amber-300 text-xs text-amber-950 flex items-center gap-2.5">
+                  <AlertCircle className="w-4 h-4 text-amber-700 shrink-0" />
+                  <span>
+                    <strong>Notice:</strong> Changing the starting invoice number will only apply to future invoices. Your {existingCount} existing invoice numbers will never be modified.
+                  </span>
+                </div>
+              )}
+            </div>
+
+            <h3 className="text-xs font-extrabold uppercase tracking-wider text-slate-400 pt-1">
+              General Invoice Terms &amp; Defaults
             </h3>
 
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">
-                  Invoice Prefix Series *
+                  Invoice Prefix Series (Optional Fallback)
                 </label>
                 <input
                   type="text"
-                  value={formData.invoicePrefix}
+                  value={formData.invoicePrefix || ''}
                   onChange={(e) => handleTextChange('invoicePrefix', e.target.value.toUpperCase())}
-                  required
-                  placeholder="e.g. IT-2025"
-                  className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-mono font-bold"
-                />
-                <span className="text-[10px] text-slate-400 mt-1 block">
-                  Next invoice will be: <strong>{formData.invoicePrefix}-000{formData.nextInvoiceNumber}</strong>
-                </span>
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">
-                  Next Serial Counter *
-                </label>
-                <input
-                  type="number"
-                  min="1"
-                  value={formData.nextInvoiceNumber}
-                  onChange={(e) => handleTextChange('nextInvoiceNumber', parseInt(e.target.value) || 1)}
-                  required
+                  placeholder="e.g. INV"
                   className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-mono font-bold"
                 />
               </div>

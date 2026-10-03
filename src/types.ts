@@ -124,6 +124,7 @@ export interface Invoice {
   customerSnapshot: Customer;
   companySnapshot?: CompanySettings;
   userId?: string;
+  companyName?: string;
   items: InvoiceItem[];
   subtotal: number;
   discount: number;
@@ -252,6 +253,7 @@ export interface InvoiceSettings {
   invoicePrefix: string;
   financialYear: string;
   startingNumber: number;
+  startingInvoiceNumber?: string; // User-defined starting sequence, e.g. "1001" or "INV-001" or "INV-2026-001"
   numberFormat: string;
   defaultTemplate: InvoiceTemplate;
   defaultTaxType: 'GST' | 'None';
@@ -278,6 +280,15 @@ export interface InvoiceSettings {
   showSignature?: boolean; // Default true (Show)
   showLogo?: boolean; // Default true (Show)
 
+  updatedAt: string;
+}
+
+export interface UserInvoiceCounter {
+  userId: string;
+  startingInvoiceNumber?: string;
+  currentCount: number;
+  lastInvoiceNumber?: string;
+  nextInvoiceNumber: string;
   updatedAt: string;
 }
 

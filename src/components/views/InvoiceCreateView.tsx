@@ -77,6 +77,7 @@ export const InvoiceCreateView: React.FC<InvoiceCreateViewProps> = ({
 
   // Basic Details
   const [invoiceNumber, setInvoiceNumber] = useState('');
+  const [isManualInvoiceNumber, setIsManualInvoiceNumber] = useState(false);
   const [invoiceDate, setInvoiceDate] = useState(() => new Date().toISOString().split('T')[0]);
   const [paymentTerms, setPaymentTerms] = useState(invoiceSettings.defaultPaymentTerms || 'Due on Receipt');
   const [dueDate, setDueDate] = useState(() => {
@@ -188,10 +189,10 @@ export const InvoiceCreateView: React.FC<InvoiceCreateViewProps> = ({
 
   // Initialize invoice number for fresh creation
   useEffect(() => {
-    if (!editInvoiceId) {
+    if (!editInvoiceId && !isManualInvoiceNumber) {
       setInvoiceNumber(getNextInvoiceNumber());
     }
-  }, [invoiceSettings, editInvoiceId]);
+  }, [invoiceSettings, editInvoiceId, invoices, isManualInvoiceNumber]);
 
   // When customer changes, auto-set place of supply
   useEffect(() => {
@@ -724,7 +725,10 @@ export const InvoiceCreateView: React.FC<InvoiceCreateViewProps> = ({
               <input
                 type="text"
                 value={invoiceNumber}
-                onChange={(e) => setInvoiceNumber(e.target.value)}
+                onChange={(e) => {
+                  setInvoiceNumber(e.target.value);
+                  setIsManualInvoiceNumber(true);
+                }}
                 required
                 className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-900 focus:bg-white focus:ring-2 focus:ring-amber-500"
               />

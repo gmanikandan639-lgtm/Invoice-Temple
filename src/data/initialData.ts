@@ -38,6 +38,7 @@ export const DEFAULT_INVOICE_SETTINGS: InvoiceSettings = {
   invoicePrefix: 'INV',
   financialYear: getCurrentFinancialYear(),
   startingNumber: 1,
+  startingInvoiceNumber: '',
   numberFormat: 'INV/{FY}/{00000}',
   defaultTemplate: 'classic',
   defaultTaxType: 'None',

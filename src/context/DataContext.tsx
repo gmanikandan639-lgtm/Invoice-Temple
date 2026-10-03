@@ -11,6 +11,7 @@ import {
   AppNotification,
   Announcement,
   ActivityLog,
+  UserInvoiceCounter,
 } from '../types';
 import {
   DEFAULT_COMPANY_SETTINGS,
@@ -35,7 +36,13 @@ import {
   query,
   orderBy,
   where,
+  runTransaction,
 } from 'firebase/firestore';
+import {
+  calculateNextInvoiceNumber,
+  getNextInvoiceNumberString,
+  parseInvoiceNumber,
+} from '../utils/invoiceNumbering';
 import { useAuth } from './AuthContext';
 
 interface DataContextType {
@@ -43,6 +50,8 @@ interface DataContextType {
   updateCompanySettings: (settings: CompanySettings) => Promise<void>;
   invoiceSettings: InvoiceSettings;
   updateInvoiceSettings: (settings: Partial<InvoiceSettings> | InvoiceSettings) => Promise<void>;
+  userInvoiceCounter: UserInvoiceCounter | null;
+  getInvoiceCountForUser: (userId?: string) => number;
   customers: Customer[];
   addCustomer: (customer: Omit<Customer, 'id' | 'createdAt' | 'updatedAt'>) => Promise<Customer>;
   updateCustomer: (id: string, data: Partial<Customer>) => Promise<void>;
@@ -124,6 +133,9 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     showLogo: true,
     ...loadLocal('invoice_settings', DEFAULT_INVOICE_SETTINGS),
   }));
+  const [userInvoiceCounter, setUserInvoiceCounter] = useState<UserInvoiceCounter | null>(() =>
+    loadLocal('user_invoice_counter', null)
+  );
   const [customers, setCustomers] = useState<Customer[]>(() =>
     loadLocal('customers', INITIAL_CUSTOMERS)
   );
@@ -149,7 +161,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     loadLocal('activity_logs', INITIAL_ACTIVITY_LOGS)
   );
 
-  // Switch user-specific company settings whenever currentUser changes
+  // Switch user-specific company settings, invoice settings, and counter whenever currentUser changes
   useEffect(() => {
     if (currentUser?.uid) {
       if (currentUser.companySettings) {
@@ -165,6 +177,21 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
             logoUrl: '',
           });
         }
+      }
+
+      // User-specific invoice settings
+      const userInvSaved = loadLocal<InvoiceSettings | null>(`invoice_settings_${currentUser.uid}`, null);
+      if (userInvSaved) {
+        setInvoiceSettings((prev) => ({
+          ...DEFAULT_INVOICE_SETTINGS,
+          ...userInvSaved,
+        }));
+      }
+
+      // User-specific counter
+      const userCounterSaved = loadLocal<UserInvoiceCounter | null>(`counter_${currentUser.uid}`, null);
+      if (userCounterSaved) {
+        setUserInvoiceCounter(userCounterSaved);
       }
 
       // If switching user, load user-specific cached records when available
@@ -223,11 +250,32 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
                   companyName: uData.companyName,
                 }));
               }
+              if (uData.invoiceSettings) {
+                setInvoiceSettings((prev) => ({
+                  ...prev,
+                  ...(uData.invoiceSettings as InvoiceSettings),
+                }));
+                saveLocal(`invoice_settings_${firebaseUser.uid}`, uData.invoiceSettings);
+              }
             }
           },
           (err) => handleFirestoreError(err, OperationType.GET, `users/${firebaseUser.uid}`)
         );
         unsubs.push(unsubUserDoc);
+
+        // User-specific Invoice Counter Listener
+        const unsubCounter = onSnapshot(
+          doc(db, 'counters', firebaseUser.uid),
+          (d) => {
+            if (d.exists()) {
+              const cData = d.data() as UserInvoiceCounter;
+              setUserInvoiceCounter(cData);
+              saveLocal(`counter_${firebaseUser.uid}`, cData);
+            }
+          },
+          (err) => handleFirestoreError(err, OperationType.GET, `counters/${firebaseUser.uid}`)
+        );
+        unsubs.push(unsubCounter);
 
         // Invoices: admin sees all; normal user sees only their own
         const qInvoices = isAdminUser
@@ -421,24 +469,23 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const getNextInvoiceNumber = (): string => {
-    const prefix = invoiceSettings.invoicePrefix || 'INV';
-    const fy = invoiceSettings.financialYear || '2026-27';
+  const getInvoiceCountForUser = (userId?: string): number => {
+    const uid = userId || currentUser?.uid || auth?.currentUser?.uid;
+    if (!uid) return 0;
+    return invoices.filter((i) => (i.createdBy || i.userId) === uid).length;
+  };
 
-    // Find the highest number formatted in this FY
-    let highest = invoiceSettings.startingNumber || 1;
-    invoices.forEach((inv) => {
-      if (inv.invoiceNumber && inv.invoiceNumber.includes(fy)) {
-        const parts = inv.invoiceNumber.split('/');
-        const numPart = parseInt(parts[parts.length - 1], 10);
-        if (!isNaN(numPart) && numPart >= highest) {
-          highest = numPart + 1;
-        }
-      }
-    });
+  const getNextInvoiceNumber = (overrideStarting?: string): string => {
+    const targetUid = currentUser?.uid || auth?.currentUser?.uid || 'user';
+    const userInvoices = invoices.filter((inv) => (inv.createdBy || inv.userId) === targetUid);
+    const existingNumbers = userInvoices.map((inv) => inv.invoiceNumber).filter(Boolean);
 
-    const padded = String(highest).padStart(5, '0');
-    return `${prefix}/${fy}/${padded}`;
+    const configuredStart =
+      overrideStarting !== undefined
+        ? overrideStarting
+        : invoiceSettings.startingInvoiceNumber || (invoiceSettings.invoicePrefix ? `${invoiceSettings.invoicePrefix}-001` : '');
+
+    return calculateNextInvoiceNumber(configuredStart, existingNumbers);
   };
 
   const updateCompanySettings = async (newSettings: CompanySettings) => {
@@ -485,16 +532,54 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       updatedAt: new Date().toISOString(),
     };
     setInvoiceSettings(updated);
-    saveLocal('invoice_settings', updated);
 
     const targetUid = auth?.currentUser?.uid || currentUser?.uid;
+
+    if (targetUid) {
+      saveLocal(`invoice_settings_${targetUid}`, updated);
+    }
+    saveLocal('invoice_settings', updated);
+
     logActivity('Invoice Settings Updated', 'Settings', targetUid || 'invoice_settings', {
       prefix: updated.invoicePrefix || 'INV',
+      startingInvoiceNumber: updated.startingInvoiceNumber,
     });
 
-    if (isConfigured && db) {
+    if (isConfigured && db && targetUid) {
       try {
-        await setDoc(doc(db, 'settings', 'invoice'), sanitizeForFirestore(updated), { merge: true });
+        // Save user-specific invoice settings to users/{uid}
+        await setDoc(
+          doc(db, 'users', targetUid),
+          sanitizeForFirestore({
+            invoiceSettings: sanitizeForFirestore(updated),
+            updatedAt: updated.updatedAt,
+          }),
+          { merge: true }
+        );
+
+        // If user configured a starting number, update counter document nextInvoiceNumber for future invoices
+        if (updated.startingInvoiceNumber) {
+          const counterPayload: Partial<UserInvoiceCounter> = {
+            userId: targetUid,
+            startingInvoiceNumber: updated.startingInvoiceNumber,
+            nextInvoiceNumber: updated.startingInvoiceNumber,
+            updatedAt: new Date().toISOString(),
+          };
+          await setDoc(doc(db, 'counters', targetUid), sanitizeForFirestore(counterPayload), { merge: true });
+          saveLocal(`counter_${targetUid}`, { ...userInvoiceCounter, ...counterPayload });
+          setUserInvoiceCounter((prev) => ({
+            userId: targetUid,
+            currentCount: prev?.currentCount || 0,
+            lastInvoiceNumber: prev?.lastInvoiceNumber || '',
+            ...prev,
+            ...counterPayload,
+          } as UserInvoiceCounter));
+        }
+
+        // Global fallback for Admin
+        if (currentUser?.role === 'admin') {
+          await setDoc(doc(db, 'settings', 'invoice'), sanitizeForFirestore(updated), { merge: true });
+        }
       } catch (err) {
         console.warn('Failed to update invoice settings in Firestore:', err);
       }
@@ -604,20 +689,58 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const addInvoice = async (invoiceData: Omit<Invoice, 'id' | 'createdAt' | 'updatedAt'>): Promise<Invoice> => {
-    const creator = invoiceData.createdBy || auth?.currentUser?.uid || currentUser?.uid || 'user';
+    const creator = invoiceData.createdBy || invoiceData.userId || auth?.currentUser?.uid || currentUser?.uid || 'user';
+    const creatorName = invoiceData.createdByName || currentUser?.displayName || currentUser?.name || 'User';
+    const companyName =
+      invoiceData.companyName || companySettings.companyName || currentUser?.companyName || 'My Company';
+
+    // Get user-specific existing invoice numbers
+    const userInvoices = invoices.filter((inv) => (inv.createdBy || inv.userId) === creator);
+    const existingNumbers = userInvoices.map((inv) => inv.invoiceNumber).filter(Boolean);
+
+    // Compute or validate assigned invoice number
+    let assignedNumber = (invoiceData.invoiceNumber || '').trim();
+    if (!assignedNumber || existingNumbers.includes(assignedNumber)) {
+      assignedNumber = calculateNextInvoiceNumber(
+        invoiceSettings.startingInvoiceNumber,
+        existingNumbers
+      );
+    }
+
+    const nextAfterAssigned = getNextInvoiceNumberString(assignedNumber, 1);
+
     const newInv: Invoice = {
       ...invoiceData,
+      id: 'inv_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
+      invoiceNumber: assignedNumber,
+      userId: creator,
       createdBy: creator,
-      id: 'inv_' + Date.now(),
+      createdByName: creatorName,
+      companyName: companyName,
+      companySnapshot: companySettings,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
+
+    // Optimistically update in-memory list & local storage
     setInvoices((prev) => {
       const updated = [newInv, ...prev];
       saveLocal('invoices', updated);
       if (creator) saveLocal(`invoices_${creator}`, updated);
       return updated;
     });
+
+    const localCounter: UserInvoiceCounter = {
+      userId: creator,
+      startingInvoiceNumber: invoiceSettings.startingInvoiceNumber || assignedNumber,
+      currentCount: userInvoices.length + 1,
+      lastInvoiceNumber: assignedNumber,
+      nextInvoiceNumber: nextAfterAssigned,
+      updatedAt: new Date().toISOString(),
+    };
+    setUserInvoiceCounter(localCounter);
+    saveLocal(`counter_${creator}`, localCounter);
+
     logActivity('Invoice Created', 'Invoices', newInv.invoiceNumber, {
       grandTotal: newInv.grandTotal,
       customer: newInv.customerSnapshot?.customerName,
@@ -640,9 +763,56 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return updated;
     });
 
+    // Atomic Firestore Transaction for collision-proof user-specific numbering
     if (isConfigured && db && auth?.currentUser) {
-      await setDoc(doc(db, 'invoices', newInv.id), sanitizeForFirestore(newInv));
-      await setDoc(doc(db, 'notifications', notif.id), sanitizeForFirestore(notif));
+      try {
+        const counterRef = doc(db, 'counters', creator);
+        const invoiceRef = doc(db, 'invoices', newInv.id);
+        const notifRef = doc(db, 'notifications', notif.id);
+
+        await runTransaction(db, async (transaction) => {
+          const counterSnap = await transaction.get(counterRef);
+          let finalNum = assignedNumber;
+          let nextNum = nextAfterAssigned;
+
+          if (!counterSnap.exists()) {
+            transaction.set(counterRef, sanitizeForFirestore({
+              userId: creator,
+              startingInvoiceNumber: invoiceSettings.startingInvoiceNumber || assignedNumber,
+              currentCount: 1,
+              lastInvoiceNumber: finalNum,
+              nextInvoiceNumber: nextNum,
+              updatedAt: new Date().toISOString(),
+            }));
+          } else {
+            const cData = counterSnap.data() as UserInvoiceCounter;
+            // If the transaction counter's nextInvoiceNumber was already advanced by another tab,
+            // claim the fresh atomic nextInvoiceNumber to guarantee 0 duplicates!
+            if (cData.nextInvoiceNumber && existingNumbers.includes(finalNum)) {
+              finalNum = cData.nextInvoiceNumber;
+              nextNum = getNextInvoiceNumberString(finalNum, 1);
+              newInv.invoiceNumber = finalNum;
+            } else {
+              nextNum = getNextInvoiceNumberString(finalNum, 1);
+            }
+
+            transaction.update(counterRef, sanitizeForFirestore({
+              currentCount: (cData.currentCount || 0) + 1,
+              lastInvoiceNumber: finalNum,
+              nextInvoiceNumber: nextNum,
+              updatedAt: new Date().toISOString(),
+            }));
+          }
+
+          transaction.set(invoiceRef, sanitizeForFirestore(newInv));
+          transaction.set(notifRef, sanitizeForFirestore(notif));
+        });
+      } catch (txErr) {
+        console.warn('Transaction fallback write:', txErr);
+        await setDoc(doc(db, 'invoices', newInv.id), sanitizeForFirestore(newInv));
+        await setDoc(doc(db, 'notifications', notif.id), sanitizeForFirestore(notif));
+        await setDoc(doc(db, 'counters', creator), sanitizeForFirestore(localCounter), { merge: true });
+      }
     }
     return newInv;
   };
@@ -947,6 +1117,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         activityLogs,
         logActivity,
         getNextInvoiceNumber,
+        userInvoiceCounter,
+        getInvoiceCountForUser,
         clearAllDemoData,
         resetDemoData,
         isFirebaseConnected: isConfigured,
