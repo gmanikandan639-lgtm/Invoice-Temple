@@ -1114,6 +1114,24 @@ export const InvoiceCreateView: React.FC<InvoiceCreateViewProps> = ({
                   </div>
                 )}
 
+                {/* Editable Tax (controlled by showGst setting) */}
+                {showGst && (
+                  <div className="pt-2 flex justify-between items-center gap-2">
+                    <span className="text-slate-300 font-semibold">Tax (₹):</span>
+                    <div className="w-32">
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={invoiceTax === 0 ? '' : invoiceTax}
+                        onChange={(e) => setInvoiceTax(parseFloat(e.target.value) || 0)}
+                        placeholder="0.00"
+                        className="w-full px-2.5 py-1.5 bg-slate-800 border border-slate-700 rounded-lg text-xs font-bold text-white text-right focus:ring-2 focus:ring-amber-500 focus:outline-none"
+                      />
+                    </div>
+                  </div>
+                )}
+
                 {/* Editable Shipping (controlled by showShipping setting) */}
                 {showShipping && (
                   <div className="pt-2 flex justify-between items-center gap-2">
@@ -1132,21 +1150,12 @@ export const InvoiceCreateView: React.FC<InvoiceCreateViewProps> = ({
                   </div>
                 )}
 
-                {/* Editable Tax (controlled by showGst setting) */}
-                {showGst && (
-                  <div className="pt-2 flex justify-between items-center gap-2">
-                    <span className="text-slate-300 font-semibold">Tax (₹):</span>
-                    <div className="w-32">
-                      <input
-                        type="number"
-                        min="0"
-                        step="0.01"
-                        value={invoiceTax === 0 ? '' : invoiceTax}
-                        onChange={(e) => setInvoiceTax(parseFloat(e.target.value) || 0)}
-                        placeholder="0.00"
-                        className="w-full px-2.5 py-1.5 bg-slate-800 border border-slate-700 rounded-lg text-xs font-bold text-white text-right focus:ring-2 focus:ring-amber-500 focus:outline-none"
-                      />
-                    </div>
+                {showRoundOff && totals.roundOff !== 0 && (
+                  <div className="flex justify-between items-center text-slate-400 pt-2">
+                    <span>Round Off:</span>
+                    <span className="font-semibold text-slate-300">
+                      {totals.roundOff < 0 ? `-${formatCurrency(Math.abs(totals.roundOff))}` : formatCurrency(totals.roundOff)}
+                    </span>
                   </div>
                 )}
 
