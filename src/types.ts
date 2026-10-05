@@ -138,6 +138,9 @@ export interface Invoice {
   grandTotal: number;
   amountPaid: number;
   balanceAmount: number;
+  advanceAmount?: number;
+  advanceDate?: string;
+  advanceReference?: string;
   paymentStatus: InvoicePaymentStatus;
   invoiceStatus: InvoiceStatus;
   template?: InvoiceTemplate;

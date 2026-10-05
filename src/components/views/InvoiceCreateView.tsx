@@ -152,6 +152,7 @@ export const InvoiceCreateView: React.FC<InvoiceCreateViewProps> = ({
   const [initialPaymentAmount, setInitialPaymentAmount] = useState<number>(0);
   const [initialPaymentMode, setInitialPaymentMode] = useState<PaymentMode>('Bank Transfer');
   const [initialPaymentRef, setInitialPaymentRef] = useState('');
+  const [advanceDate, setAdvanceDate] = useState<string>(new Date().toISOString().split('T')[0]);
 
   // Notes and terms
   const [notes, setNotes] = useState(invoiceSettings.defaultNotes || '');
@@ -189,7 +190,16 @@ export const InvoiceCreateView: React.FC<InvoiceCreateViewProps> = ({
       }
       setNotes(existingInvoice.notes || '');
       setTerms(existingInvoice.terms || '');
-      if (existingInvoice.amountPaid && existingInvoice.amountPaid > 0) {
+      if (existingInvoice.advanceDate) {
+        setAdvanceDate(existingInvoice.advanceDate);
+      }
+      if (existingInvoice.advanceReference) {
+        setInitialPaymentRef(existingInvoice.advanceReference);
+      }
+      if (existingInvoice.advanceAmount !== undefined && existingInvoice.advanceAmount > 0) {
+        setRecordInitialPayment(true);
+        setInitialPaymentAmount(existingInvoice.advanceAmount);
+      } else if (existingInvoice.amountPaid && existingInvoice.amountPaid > 0) {
         setRecordInitialPayment(true);
         setInitialPaymentAmount(existingInvoice.amountPaid);
       }
@@ -284,7 +294,10 @@ export const InvoiceCreateView: React.FC<InvoiceCreateViewProps> = ({
     setItems((prev) => prev.filter((_, i) => i !== index));
   };
 
-  // Totals Calculation according to authoritative formula: Subtotal - Discount + Tax + Shipping +/- Round Off = Grand Total
+  // Totals Calculation according to authoritative formula:
+  // Calculated Total = Subtotal - Discount + Tax + Shipping
+  // Grand Total = Calculated Total - Round Off
+  // Balance Due = Grand Total - Paid
   const totals = useMemo(() => {
     let subtotal = 0;
     items.forEach((it) => {
@@ -295,7 +308,6 @@ export const InvoiceCreateView: React.FC<InvoiceCreateViewProps> = ({
     subtotal = Math.round(subtotal * 100) / 100;
 
     // Apply show/hide setting constraints:
-    // If disabled in settings, value is 0 and not applied/added
     const discount = showDiscount ? Math.min(subtotal, Math.max(0, Number(invoiceDiscount) || 0)) : 0;
     const tax = showGst ? Math.max(0, Number(invoiceTax) || 0) : 0;
     const shipping = showShipping ? Math.max(0, Number(invoiceShipping) || 0) : 0;
@@ -304,18 +316,20 @@ export const InvoiceCreateView: React.FC<InvoiceCreateViewProps> = ({
     const calculatedTotal = Math.max(0, Math.round((subtotal - discount + tax + shipping) * 100) / 100);
 
     // Auto round off calculation:
-    // Round Off = Rounded Total - Calculated Total
-    // Grand Total = Calculated Total + Round Off
-    const autoRoundedTotal = Math.round(calculatedTotal);
-    const autoRoundOff = Math.round((autoRoundedTotal - calculatedTotal) * 100) / 100;
+    // Round Off is always treated as a deduction (-) from total
+    // Automatically determined while preparing the invoice: deducts fractional paise to round down to whole rupee
+    const fraction = Math.round((calculatedTotal - Math.floor(calculatedTotal)) * 100) / 100;
+    const autoRoundOff = showRoundOff ? fraction : 0;
 
     // Effective round off: uses user manual override if set, otherwise automatically calculated
-    const effectiveRoundOff = (manualRoundOff !== null && !isNaN(manualRoundOff))
-      ? manualRoundOff
+    const rawRoundOff = (manualRoundOff !== null && !isNaN(manualRoundOff))
+      ? Math.max(0, manualRoundOff)
       : autoRoundOff;
 
-    const grandTotal = Math.max(0, Math.round((calculatedTotal + effectiveRoundOff) * 100) / 100);
-    const roundOff = Math.round(effectiveRoundOff * 100) / 100;
+    const roundOff = Math.round(rawRoundOff * 100) / 100;
+
+    // Grand Total = Calculated Total - Round Off
+    const grandTotal = Math.max(0, Math.round((calculatedTotal - roundOff) * 100) / 100);
 
     const taxableAmount = Math.max(0, Math.round((subtotal - discount) * 100) / 100);
 
@@ -340,6 +354,7 @@ export const InvoiceCreateView: React.FC<InvoiceCreateViewProps> = ({
     showDiscount,
     showShipping,
     showGst,
+    showRoundOff,
   ]);
 
   // Quick Customer Creation
@@ -527,6 +542,9 @@ export const InvoiceCreateView: React.FC<InvoiceCreateViewProps> = ({
           grandTotal: totals.grandTotal,
           amountPaid: paidAmt,
           balanceAmount: balanceAmt,
+          advanceAmount: recordInitialPayment && paidAmt > 0 ? paidAmt : undefined,
+          advanceDate: recordInitialPayment && paidAmt > 0 ? (advanceDate || invoiceDate) : undefined,
+          advanceReference: recordInitialPayment && paidAmt > 0 ? (initialPaymentRef || 'ADV-001') : undefined,
           paymentStatus,
           invoiceStatus,
           template,
@@ -541,10 +559,10 @@ export const InvoiceCreateView: React.FC<InvoiceCreateViewProps> = ({
             invoiceNumber,
             customerId: selectedCustomer.id,
             customerName: selectedCustomer.customerName,
-            paymentDate: invoiceDate,
+            paymentDate: advanceDate || invoiceDate,
             amount: paidAmt,
             paymentMode: initialPaymentMode,
-            referenceNumber: initialPaymentRef,
+            referenceNumber: initialPaymentRef || 'ADV-001',
             notes: 'Initial settlement on invoice finalization',
             createdBy: currentUser?.uid || 'user',
             createdByName: getUserDisplayName(currentUser),
@@ -579,6 +597,9 @@ export const InvoiceCreateView: React.FC<InvoiceCreateViewProps> = ({
           grandTotal: totals.grandTotal,
           amountPaid: paidAmt,
           balanceAmount: balanceAmt,
+          advanceAmount: recordInitialPayment && paidAmt > 0 ? paidAmt : undefined,
+          advanceDate: recordInitialPayment && paidAmt > 0 ? (advanceDate || invoiceDate) : undefined,
+          advanceReference: recordInitialPayment && paidAmt > 0 ? (initialPaymentRef || 'ADV-001') : undefined,
           paymentStatus,
           invoiceStatus,
           template,
@@ -596,10 +617,10 @@ export const InvoiceCreateView: React.FC<InvoiceCreateViewProps> = ({
             invoiceNumber: newInv.invoiceNumber,
             customerId: selectedCustomer.id,
             customerName: selectedCustomer.customerName,
-            paymentDate: invoiceDate,
+            paymentDate: advanceDate || invoiceDate,
             amount: paidAmt,
             paymentMode: initialPaymentMode,
-            referenceNumber: initialPaymentRef,
+            referenceNumber: initialPaymentRef || 'ADV-001',
             notes: 'Initial settlement on invoice creation',
             createdBy: currentUser?.uid || 'user',
             createdByName: getUserDisplayName(currentUser),
@@ -1041,10 +1062,10 @@ export const InvoiceCreateView: React.FC<InvoiceCreateViewProps> = ({
               </label>
 
               {recordInitialPayment && (
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2">
+                <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 pt-2">
                   <div>
                     <label className="block text-[11px] font-semibold text-slate-600 mb-1">
-                      Amount Paid (₹)
+                      Advance / Paid (₹)
                     </label>
                     <input
                       type="number"
@@ -1054,6 +1075,18 @@ export const InvoiceCreateView: React.FC<InvoiceCreateViewProps> = ({
                       value={initialPaymentAmount}
                       onChange={(e) => setInitialPaymentAmount(parseFloat(e.target.value) || 0)}
                       className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-bold text-emerald-700 focus:ring-2 focus:ring-amber-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-semibold text-slate-600 mb-1">
+                      Advance Date
+                    </label>
+                    <input
+                      type="date"
+                      value={advanceDate}
+                      onChange={(e) => setAdvanceDate(e.target.value)}
+                      className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs text-slate-800 font-semibold focus:ring-2 focus:ring-amber-500"
                     />
                   </div>
 
@@ -1077,13 +1110,13 @@ export const InvoiceCreateView: React.FC<InvoiceCreateViewProps> = ({
 
                   <div>
                     <label className="block text-[11px] font-semibold text-slate-600 mb-1">
-                      Reference / UTR
+                      Advance Reference / UTR
                     </label>
                     <input
                       type="text"
                       value={initialPaymentRef}
                       onChange={(e) => setInitialPaymentRef(e.target.value)}
-                      placeholder="e.g. UTR-98219"
+                      placeholder="e.g. ADV-001 / UTR-98219"
                       className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs text-slate-800"
                     />
                   </div>
@@ -1591,8 +1624,8 @@ export const InvoiceCreateView: React.FC<InvoiceCreateViewProps> = ({
                 {showRoundOff && (
                   <div className="flex justify-between py-1 border-b border-slate-100 text-slate-500">
                     <span>Round Off</span>
-                    <span className="font-semibold">
-                      {totals.roundOff < 0 ? `-${formatCurrency(Math.abs(totals.roundOff))}` : (totals.roundOff > 0 ? `+${formatCurrency(totals.roundOff)}` : formatCurrency(0))}
+                    <span className="font-semibold text-rose-600">
+                      {(totals.roundOff || 0) > 0 ? `- ${formatCurrency(totals.roundOff)}` : formatCurrency(0)}
                     </span>
                   </div>
                 )}
@@ -1613,6 +1646,33 @@ export const InvoiceCreateView: React.FC<InvoiceCreateViewProps> = ({
                   </div>
                 )}
               </div>
+            </div>
+
+            {/* Advance Details */}
+            {recordInitialPayment && initialPaymentAmount > 0 && (
+              <div className="pt-3 pb-1 border-t border-slate-200 break-inside-avoid page-break-inside-avoid">
+                <h5 className="text-[11px] font-bold uppercase tracking-wider text-slate-900 mb-1.5">
+                  Advance Details
+                </h5>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs bg-slate-50/80 p-2.5 rounded-xl border border-slate-200/80">
+                  <div>
+                    <span className="text-slate-500 block text-[10px] uppercase font-semibold">Advance Amount:</span>
+                    <span className="font-bold text-slate-900">{formatCurrency(initialPaymentAmount)}</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-500 block text-[10px] uppercase font-semibold">Advance Date:</span>
+                    <span className="font-semibold text-slate-800">{formatInvoiceDate(advanceDate || invoiceDate)}</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-500 block text-[10px] uppercase font-semibold">Advance Reference:</span>
+                    <span className="font-mono font-semibold text-slate-800">{initialPaymentRef || 'ADV-001'}</span>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <div className="pt-2 text-center text-xs font-medium text-slate-500 italic break-inside-avoid page-break-inside-avoid">
+              Thank you for your business.
             </div>
 
             {/* Signatory Footer */}

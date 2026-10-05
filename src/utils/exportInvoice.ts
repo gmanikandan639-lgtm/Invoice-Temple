@@ -100,6 +100,28 @@ let colorConverterCanvas: HTMLCanvasElement | null = null;
 let colorConverterCtx: CanvasRenderingContext2D | null = null;
 
 /**
+ * Splits comma-separated argument lists while ignoring commas nested inside parentheses.
+ */
+function splitTopLevelCommas(str: string): string[] {
+  const parts: string[] = [];
+  let depth = 0;
+  let current = '';
+  for (let i = 0; i < str.length; i++) {
+    const ch = str[i];
+    if (ch === '(') depth++;
+    else if (ch === ')') depth--;
+    if (ch === ',' && depth === 0) {
+      parts.push(current.trim());
+      current = '';
+    } else {
+      current += ch;
+    }
+  }
+  if (current.trim()) parts.push(current.trim());
+  return parts;
+}
+
+/**
  * Converts modern CSS colors (oklab, oklch, lab, lch, color-mix, color) to standard sRGB hex or rgb/rgba strings.
  */
 export function convertColorToStandardRgb(colorStr: string): string {
@@ -143,6 +165,27 @@ export function convertColorToStandardRgb(colorStr: string): string {
     if (oklab) return oklab;
   }
 
+  // 4. Algorithmic color-mix
+  if (/^color-mix\(/i.test(trimmed)) {
+    const parenIndex = trimmed.indexOf('(');
+    const inner = trimmed.slice(parenIndex + 1, -1);
+    const parts = splitTopLevelCommas(inner);
+    if (parts.length >= 3) {
+      const c1Part = parts[1].trim();
+      const c2Part = parts.slice(2).join(',').trim();
+      if (c2Part.includes('transparent')) {
+        const matchPercent = c1Part.match(/([\d.]+)%/);
+        const alpha = matchPercent ? parseFloat(matchPercent[1]) / 100 : 0.5;
+        const cleanColor = convertColorToStandardRgb(c1Part.replace(/[\d.]+%/g, '').trim());
+        if (cleanColor.startsWith('rgb(')) {
+          return cleanColor.replace(/^rgb\(/, 'rgba(').replace(/\)$/, `, ${alpha})`);
+        }
+        return cleanColor;
+      }
+      return convertColorToStandardRgb(c1Part.replace(/[\d.]+%/g, '').trim());
+    }
+  }
+
   return '#334155';
 }
 
@@ -183,6 +226,7 @@ function replaceBalancedFunctions(
         const innerArgs = curr.substring(globalPattern.lastIndex, i - 1);
         result += replacer(funcName.toLowerCase(), innerArgs, fullCall);
         lastIndex = i;
+        globalPattern.lastIndex = i; // Advance regex index past the balanced function!
       } else {
         result += match[0];
         lastIndex = globalPattern.lastIndex;
@@ -217,19 +261,20 @@ export function sanitizeAllCssText(rawCss: string): string {
       return parseOklab(full) || 'rgb(30, 41, 59)';
     }
     if (name === 'color-mix') {
-      const parts = args.split(',');
+      const parts = splitTopLevelCommas(args);
       if (parts.length >= 3) {
         const c1Part = parts[1].trim();
         const c2Part = parts.slice(2).join(',').trim();
         if (c2Part.includes('transparent')) {
           const matchPercent = c1Part.match(/([\d.]+)%/);
           const alpha = matchPercent ? parseFloat(matchPercent[1]) / 100 : 0.5;
-          const cleanColor = c1Part.replace(/[\d.]+%/g, '').trim();
-          return cleanColor.startsWith('rgb(')
-            ? cleanColor.replace('rgb(', 'rgba(').replace(')', `, ${alpha})`)
-            : cleanColor;
+          const cleanColor = convertColorToStandardRgb(c1Part.replace(/[\d.]+%/g, '').trim());
+          if (cleanColor.startsWith('rgb(')) {
+            return cleanColor.replace(/^rgb\(/, 'rgba(').replace(/\)$/, `, ${alpha})`);
+          }
+          return cleanColor;
         }
-        return c1Part.replace(/[\d.]+%/g, '').trim();
+        return convertColorToStandardRgb(c1Part.replace(/[\d.]+%/g, '').trim());
       }
       return 'rgb(30, 41, 59)';
     }
@@ -453,10 +498,10 @@ export async function downloadInvoiceImage(
  * High-reliability offscreen fallback renderer
  */
 async function fallbackRenderImage(element: HTMLElement, filename: string): Promise<void> {
-  const width = Math.max(element.scrollWidth, 1024);
+  const width = Math.max(element.scrollWidth, 800);
   const height = element.scrollHeight || 1200;
 
-  // Use html2canvas with foreignObject disabled and minimal settings
+  // Use html2canvas with foreignObject disabled and full sanitization
   const canvas = await html2canvas(element, {
     scale: 2,
     useCORS: true,
@@ -469,26 +514,8 @@ async function fallbackRenderImage(element: HTMLElement, filename: string): Prom
     windowWidth: width,
     windowHeight: height,
     onclone: (clonedDoc) => {
-      // Force all elements inside the clone to have inline standard sRGB styles
       const target = clonedDoc.getElementById(element.id) || clonedDoc.body;
-      const allCloned = [target, ...Array.from(target.querySelectorAll('*'))] as HTMLElement[];
-      const allOrig = [element, ...Array.from(element.querySelectorAll('*'))] as HTMLElement[];
-      const count = Math.min(allCloned.length, allOrig.length);
-
-      for (let i = 0; i < count; i++) {
-        const orig = allOrig[i];
-        const cl = allCloned[i];
-        if (!orig || !cl || !cl.style) continue;
-        try {
-          const comp = window.getComputedStyle(orig);
-          cl.style.color = convertColorToStandardRgb(comp.color || '#0f172a');
-          cl.style.backgroundColor = comp.backgroundColor === 'rgba(0, 0, 0, 0)' ? 'transparent' : convertColorToStandardRgb(comp.backgroundColor);
-          cl.style.borderColor = convertColorToStandardRgb(comp.borderColor || '#e2e8f0');
-          cl.style.boxShadow = 'none';
-        } catch {
-          // Continue safely
-        }
-      }
+      sanitizeClonedDocument(clonedDoc, element, target);
     },
   });
 
@@ -539,20 +566,31 @@ export async function downloadInvoicePdf(
 
   const imgWidth = 210; // A4 width in mm
   const pageHeight = 297; // A4 height in mm
-  const imgHeight = (canvas.height * imgWidth) / canvas.width;
+  let renderedWidth = imgWidth;
+  let renderedHeight = (canvas.height * imgWidth) / canvas.width;
 
   const pdf = new jsPDF('p', 'mm', 'a4');
-  let heightLeft = imgHeight;
-  let position = 0;
 
-  pdf.addImage(canvas.toDataURL('image/png'), 'PNG', 0, position, imgWidth, imgHeight, undefined, 'FAST');
-  heightLeft -= pageHeight;
+  // If reasonably close to single page (within 18%), scale down slightly to ensure all content (including Advance Details) stays on the same page
+  if (renderedHeight > pageHeight && renderedHeight <= pageHeight * 1.18) {
+    const scaleFactor = (pageHeight - 4) / renderedHeight;
+    renderedWidth = imgWidth * scaleFactor;
+    renderedHeight = pageHeight - 4;
+    const xOffset = (imgWidth - renderedWidth) / 2;
+    pdf.addImage(canvas.toDataURL('image/png'), 'PNG', xOffset, 2, renderedWidth, renderedHeight, undefined, 'FAST');
+  } else {
+    let heightLeft = renderedHeight;
+    let position = 0;
 
-  while (heightLeft > 0) {
-    position = heightLeft - imgHeight;
-    pdf.addPage();
-    pdf.addImage(canvas.toDataURL('image/png'), 'PNG', 0, position, imgWidth, imgHeight, undefined, 'FAST');
+    pdf.addImage(canvas.toDataURL('image/png'), 'PNG', 0, position, renderedWidth, renderedHeight, undefined, 'FAST');
     heightLeft -= pageHeight;
+
+    while (heightLeft > 3) {
+      position = heightLeft - renderedHeight;
+      pdf.addPage();
+      pdf.addImage(canvas.toDataURL('image/png'), 'PNG', 0, position, renderedWidth, renderedHeight, undefined, 'FAST');
+      heightLeft -= pageHeight;
+    }
   }
 
   pdf.save(`${safeFilename}.pdf`);

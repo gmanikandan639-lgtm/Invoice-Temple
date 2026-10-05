@@ -146,9 +146,9 @@ export function calculateInvoiceTotals(
   let roundOff = 0;
 
   if (applyRoundOff) {
-    const rounded = Math.round(grandTotal);
-    roundOff = Math.round((rounded - grandTotal) * 100) / 100;
-    grandTotal = rounded;
+    const fraction = Math.round((grandTotal - Math.floor(grandTotal)) * 100) / 100;
+    roundOff = fraction;
+    grandTotal = Math.max(0, Math.round((grandTotal - roundOff) * 100) / 100);
   }
 
   return {

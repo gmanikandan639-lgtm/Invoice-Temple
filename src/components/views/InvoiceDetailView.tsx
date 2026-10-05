@@ -104,6 +104,13 @@ export const InvoiceDetailView: React.FC<InvoiceDetailViewProps> = ({
 
   // Related payments for this invoice
   const invoicePayments = payments.filter((p) => p.invoiceId === invoice.id);
+  const primaryPayment = invoicePayments[0];
+  const hasAdvance = (invoice.advanceAmount !== undefined && invoice.advanceAmount > 0) ||
+                     (invoice.amountPaid > 0) ||
+                     (invoicePayments.length > 0);
+  const advanceAmountVal = invoice.advanceAmount ?? primaryPayment?.amount ?? (invoice.amountPaid > 0 ? invoice.amountPaid : 0);
+  const advanceDateVal = invoice.advanceDate ?? primaryPayment?.paymentDate ?? invoice.invoiceDate;
+  const advanceRefVal = invoice.advanceReference ?? primaryPayment?.referenceNumber ?? (invoice.referenceNumber ? `ADV-${invoice.referenceNumber}` : 'ADV-001');
 
   // Handle Print
   const handlePrint = () => {
@@ -634,8 +641,8 @@ export const InvoiceDetailView: React.FC<InvoiceDetailViewProps> = ({
                 {showRoundOff && (
                   <div className="flex justify-between py-1 border-b border-slate-100 text-slate-500">
                     <span>Round Off</span>
-                    <span className="font-semibold">
-                      {invoice.roundOff < 0 ? `-${formatCurrency(Math.abs(invoice.roundOff))}` : (invoice.roundOff > 0 ? `+${formatCurrency(invoice.roundOff)}` : formatCurrency(0))}
+                    <span className="font-semibold text-rose-600">
+                      {(invoice.roundOff || 0) > 0 ? `- ${formatCurrency(invoice.roundOff)}` : formatCurrency(0)}
                     </span>
                   </div>
                 )}
@@ -661,8 +668,35 @@ export const InvoiceDetailView: React.FC<InvoiceDetailViewProps> = ({
               </div>
             </div>
 
+            {/* Advance Details */}
+            {hasAdvance && advanceAmountVal > 0 && (
+              <div className="pt-3 pb-1 border-t border-slate-200 break-inside-avoid page-break-inside-avoid">
+                <h5 className="text-[11px] font-bold uppercase tracking-wider text-slate-900 mb-1.5">
+                  Advance Details
+                </h5>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs bg-slate-50/80 p-2.5 rounded-xl border border-slate-200/80">
+                  <div>
+                    <span className="text-slate-500 block text-[10px] uppercase font-semibold">Advance Amount:</span>
+                    <span className="font-bold text-slate-900">{formatCurrency(advanceAmountVal)}</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-500 block text-[10px] uppercase font-semibold">Advance Date:</span>
+                    <span className="font-semibold text-slate-800">{formatInvoiceDate(advanceDateVal)}</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-500 block text-[10px] uppercase font-semibold">Advance Reference:</span>
+                    <span className="font-mono font-semibold text-slate-800">{advanceRefVal}</span>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <div className="pt-2 text-center text-xs font-medium text-slate-500 italic break-inside-avoid page-break-inside-avoid">
+              Thank you for your business.
+            </div>
+
             {/* Signatory Footer */}
-            <div className="pt-10 flex flex-col sm:flex-row justify-between items-start sm:items-end gap-6 text-xs border-t border-slate-100">
+            <div className="pt-6 flex flex-col sm:flex-row justify-between items-start sm:items-end gap-6 text-xs border-t border-slate-100">
               <div className="text-[11px] text-slate-500 space-y-1">
                 <p>This is a computer generated invoice requiring no physical signature.</p>
                 <p className="text-slate-400">Invoice Temple ERP Engine &bull; Reference #{invoice.id.slice(0, 8)}</p>
@@ -844,8 +878,8 @@ export const InvoiceDetailView: React.FC<InvoiceDetailViewProps> = ({
                 {showRoundOff && (
                   <div className="flex justify-between text-slate-500 font-semibold">
                     <span>Round Off</span>
-                    <span>
-                      {invoice.roundOff < 0 ? `-${formatCurrency(Math.abs(invoice.roundOff))}` : (invoice.roundOff > 0 ? `+${formatCurrency(invoice.roundOff)}` : formatCurrency(0))}
+                    <span className="text-rose-600">
+                      {(invoice.roundOff || 0) > 0 ? `- ${formatCurrency(invoice.roundOff)}` : formatCurrency(0)}
                     </span>
                   </div>
                 )}
@@ -868,8 +902,35 @@ export const InvoiceDetailView: React.FC<InvoiceDetailViewProps> = ({
               </div>
             </div>
 
+            {/* Advance Details */}
+            {hasAdvance && advanceAmountVal > 0 && (
+              <div className="pt-3 pb-1 border-t border-slate-200 break-inside-avoid page-break-inside-avoid">
+                <h5 className="text-[11px] font-bold uppercase tracking-wider text-slate-900 mb-1.5">
+                  Advance Details
+                </h5>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs bg-slate-50/80 p-2.5 rounded-xl border border-slate-200/80">
+                  <div>
+                    <span className="text-slate-500 block text-[10px] uppercase font-semibold">Advance Amount:</span>
+                    <span className="font-bold text-slate-900">{formatCurrency(advanceAmountVal)}</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-500 block text-[10px] uppercase font-semibold">Advance Date:</span>
+                    <span className="font-semibold text-slate-800">{formatInvoiceDate(advanceDateVal)}</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-500 block text-[10px] uppercase font-semibold">Advance Reference:</span>
+                    <span className="font-mono font-semibold text-slate-800">{advanceRefVal}</span>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <div className="pt-2 text-center text-xs font-medium text-slate-500 italic break-inside-avoid page-break-inside-avoid">
+              Thank you for your business.
+            </div>
+
             {/* Modern Footer with Personalisation */}
-            <div className="pt-8 border-t border-slate-200 flex flex-col sm:flex-row justify-between items-start sm:items-end gap-6 text-xs">
+            <div className="pt-6 border-t border-slate-200 flex flex-col sm:flex-row justify-between items-start sm:items-end gap-6 text-xs">
               <div className="text-[11px] text-slate-500 space-y-1">
                 <p>Computer generated commercial invoice issued under GST provisions.</p>
                 <div className="pt-1 text-xs text-slate-700 space-y-0.5">
@@ -997,7 +1058,7 @@ export const InvoiceDetailView: React.FC<InvoiceDetailViewProps> = ({
                   <p className="text-slate-800">Shipping: <strong>{formatCurrency(invoice.shipping || 0)}</strong></p>
                 )}
                 {showRoundOff && (
-                  <p className="text-slate-600">Round Off: <strong>{invoice.roundOff < 0 ? `-${formatCurrency(Math.abs(invoice.roundOff))}` : (invoice.roundOff > 0 ? `+${formatCurrency(invoice.roundOff)}` : formatCurrency(0))}</strong></p>
+                  <p className="text-slate-600">Round Off: <strong className="text-rose-700">{(invoice.roundOff || 0) > 0 ? `- ${formatCurrency(invoice.roundOff)}` : formatCurrency(0)}</strong></p>
                 )}
                 <p className="text-sm font-black border-t border-slate-900 pt-1">
                   Grand Total: {formatCurrency(invoice.grandTotal)}
@@ -1009,6 +1070,33 @@ export const InvoiceDetailView: React.FC<InvoiceDetailViewProps> = ({
                   <p className="text-xs font-bold text-rose-700">Balance Due: <strong>{formatCurrency(invoice.balanceAmount ?? Math.max(0, invoice.grandTotal - (invoice.amountPaid || 0)))}</strong></p>
                 )}
               </div>
+            </div>
+
+            {/* Advance Details */}
+            {hasAdvance && advanceAmountVal > 0 && (
+              <div className="border border-slate-900 p-2.5 break-inside-avoid page-break-inside-avoid">
+                <h5 className="text-[10px] font-bold uppercase tracking-wider text-slate-900 mb-1">
+                  Advance Details
+                </h5>
+                <div className="grid grid-cols-3 gap-2 text-xs">
+                  <div>
+                    <span className="text-slate-500 block text-[9px] uppercase font-semibold">Advance Amount:</span>
+                    <strong>{formatCurrency(advanceAmountVal)}</strong>
+                  </div>
+                  <div>
+                    <span className="text-slate-500 block text-[9px] uppercase font-semibold">Advance Date:</span>
+                    <strong>{formatInvoiceDate(advanceDateVal)}</strong>
+                  </div>
+                  <div>
+                    <span className="text-slate-500 block text-[9px] uppercase font-semibold">Advance Reference:</span>
+                    <strong className="font-mono">{advanceRefVal}</strong>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <div className="text-center text-xs font-medium text-slate-600 italic break-inside-avoid page-break-inside-avoid">
+              Thank you for your business.
             </div>
 
             {/* Boxed GST Footer with Personalisation */}
