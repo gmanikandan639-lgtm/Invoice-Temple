@@ -635,7 +635,7 @@ export const InvoiceDetailView: React.FC<InvoiceDetailViewProps> = ({
                   <div className="flex justify-between py-1 border-b border-slate-100 text-slate-500">
                     <span>Round Off</span>
                     <span className="font-semibold">
-                      {invoice.roundOff < 0 ? `-${formatCurrency(Math.abs(invoice.roundOff))}` : formatCurrency(invoice.roundOff || 0)}
+                      {invoice.roundOff < 0 ? `-${formatCurrency(Math.abs(invoice.roundOff))}` : (invoice.roundOff > 0 ? `+${formatCurrency(invoice.roundOff)}` : formatCurrency(0))}
                     </span>
                   </div>
                 )}
@@ -845,7 +845,7 @@ export const InvoiceDetailView: React.FC<InvoiceDetailViewProps> = ({
                   <div className="flex justify-between text-slate-500 font-semibold">
                     <span>Round Off</span>
                     <span>
-                      {invoice.roundOff < 0 ? `-${formatCurrency(Math.abs(invoice.roundOff))}` : formatCurrency(invoice.roundOff || 0)}
+                      {invoice.roundOff < 0 ? `-${formatCurrency(Math.abs(invoice.roundOff))}` : (invoice.roundOff > 0 ? `+${formatCurrency(invoice.roundOff)}` : formatCurrency(0))}
                     </span>
                   </div>
                 )}
@@ -997,7 +997,7 @@ export const InvoiceDetailView: React.FC<InvoiceDetailViewProps> = ({
                   <p className="text-slate-800">Shipping: <strong>{formatCurrency(invoice.shipping || 0)}</strong></p>
                 )}
                 {showRoundOff && (
-                  <p className="text-slate-600">Round Off: <strong>{invoice.roundOff < 0 ? `-${formatCurrency(Math.abs(invoice.roundOff))}` : formatCurrency(invoice.roundOff || 0)}</strong></p>
+                  <p className="text-slate-600">Round Off: <strong>{invoice.roundOff < 0 ? `-${formatCurrency(Math.abs(invoice.roundOff))}` : (invoice.roundOff > 0 ? `+${formatCurrency(invoice.roundOff)}` : formatCurrency(0))}</strong></p>
                 )}
                 <p className="text-sm font-black border-t border-slate-900 pt-1">
                   Grand Total: {formatCurrency(invoice.grandTotal)}

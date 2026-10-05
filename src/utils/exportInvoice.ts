@@ -297,25 +297,55 @@ function sanitizeClonedDocument(
   cleanStyle.textContent = sanitizedCss;
   clonedDoc.head?.appendChild(cleanStyle);
 
-  // 2. Set clean document background
+  // 2. Isolate the target invoice element as the sole top-level element in clonedDoc.body
+  // This removes any outer shell elements (Sidebar, Navbar, modal backdrops, flex/grid wrappers)
+  // preventing content from being compressed to the right side!
+  clonedDoc.body.innerHTML = '';
+  clonedDoc.body.appendChild(clonedElement);
+
+  // 3. Set root document and body dimensions to clean standard 800px width
+  const printWidth = 800;
+
   if (clonedDoc.documentElement) {
+    clonedDoc.documentElement.style.width = `${printWidth}px`;
+    clonedDoc.documentElement.style.maxWidth = `${printWidth}px`;
+    clonedDoc.documentElement.style.minWidth = `${printWidth}px`;
+    clonedDoc.documentElement.style.margin = '0 auto';
     clonedDoc.documentElement.style.backgroundColor = '#ffffff';
     clonedDoc.documentElement.style.color = '#0f172a';
   }
+
   if (clonedDoc.body) {
+    clonedDoc.body.style.width = `${printWidth}px`;
+    clonedDoc.body.style.maxWidth = `${printWidth}px`;
+    clonedDoc.body.style.minWidth = `${printWidth}px`;
+    clonedDoc.body.style.margin = '0 auto';
+    clonedDoc.body.style.padding = '0';
     clonedDoc.body.style.backgroundColor = '#ffffff';
     clonedDoc.body.style.color = '#0f172a';
-    clonedDoc.body.style.margin = '0';
-    clonedDoc.body.style.padding = '0';
   }
 
-  // 3. Unclip layout and remove scroll bounds on cloned invoice element
+  // 4. Configure clonedElement to use full 800px width with balanced margins
+  clonedElement.style.width = `${printWidth}px`;
+  clonedElement.style.maxWidth = `${printWidth}px`;
+  clonedElement.style.minWidth = `${printWidth}px`;
+  clonedElement.style.boxSizing = 'border-box';
+  clonedElement.style.margin = '0 auto';
+  clonedElement.style.padding = '36px 40px';
+  clonedElement.style.backgroundColor = '#ffffff';
+  clonedElement.style.boxShadow = 'none';
+  clonedElement.style.border = 'none';
+  clonedElement.style.borderRadius = '0';
   clonedElement.style.overflow = 'visible';
   clonedElement.style.maxHeight = 'none';
   clonedElement.style.height = 'auto';
-  clonedElement.style.width = '100%';
-  clonedElement.style.minWidth = '780px';
-  clonedElement.style.backgroundColor = '#ffffff';
+
+  // Ensure all tables and internal containers inside the invoice use full 100% width
+  const tables = clonedElement.querySelectorAll('table');
+  tables.forEach((t) => {
+    t.style.width = '100%';
+    t.style.maxWidth = '100%';
+  });
 
   const scrollContainers = clonedElement.querySelectorAll('.overflow-x-auto, [class*="overflow-"]');
   scrollContainers.forEach((c) => {
@@ -396,8 +426,8 @@ export async function downloadInvoiceImage(
       backgroundColor: '#ffffff',
       scrollX: 0,
       scrollY: 0,
-      windowWidth: Math.max(element.scrollWidth, 1024),
-      windowHeight: element.scrollHeight,
+      windowWidth: 800,
+      windowHeight: element.scrollHeight || 1200,
       onclone: (clonedDoc) => {
         const clonedElement = clonedDoc.getElementById(elementId);
         if (clonedElement) {
@@ -497,8 +527,8 @@ export async function downloadInvoicePdf(
     backgroundColor: '#ffffff',
     scrollX: 0,
     scrollY: 0,
-    windowWidth: Math.max(element.scrollWidth, 1024),
-    windowHeight: element.scrollHeight,
+    windowWidth: 800,
+    windowHeight: element.scrollHeight || 1200,
     onclone: (clonedDoc) => {
       const clonedElement = clonedDoc.getElementById(elementId);
       if (clonedElement) {

@@ -31,6 +31,7 @@ export const DEFAULT_COMPANY_SETTINGS: CompanySettings = {
   authorizedPerson: 'Manikandan G',
   termsAndConditions: '1. Goods / services once sold cannot be returned.\n2. Payment is due within the agreed credit period.\n3. Delayed payments are subject to 18% annual interest.\n4. All disputes are subject to Chennai jurisdiction only.',
   invoiceFooter: 'Thank you for your business! For billing queries, contact support@invoicetemple.com',
+  enableRoundOff: true,
   updatedAt: new Date().toISOString(),
 };
 
@@ -55,6 +56,8 @@ export const DEFAULT_INVOICE_SETTINGS: InvoiceSettings = {
   showCgst: false,
   showSgst: false,
   showIgst: false,
+  showRoundOff: true,
+  autoRoundOff: true,
   showPaymentMode: true,
   showDueDate: true,
   showNotes: true,

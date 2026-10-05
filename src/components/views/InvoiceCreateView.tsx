@@ -19,6 +19,7 @@ import {
   Printer,
   FileDown,
   Image as ImageIcon,
+  QrCode,
 } from 'lucide-react';
 import { useData } from '../../context/DataContext';
 import { useAuth } from '../../context/AuthContext';
@@ -36,7 +37,7 @@ import {
   calculateInvoiceTotals,
   getStateCodeByName,
 } from '../../utils/taxCalculator';
-import { formatCurrency, formatInvoiceDate } from '../../utils/formatters';
+import { formatCurrency, formatInvoiceDate, numberToWordsIndian } from '../../utils/formatters';
 import { downloadInvoiceImage, downloadInvoicePdf } from '../../utils/exportInvoice';
 import { Modal } from '../common/Modal';
 import { useToast } from '../common/Toast';
@@ -110,6 +111,7 @@ export const InvoiceCreateView: React.FC<InvoiceCreateViewProps> = ({
   const [invoiceDiscount, setInvoiceDiscount] = useState<number>(0);
   const [invoiceShipping, setInvoiceShipping] = useState<number>(0);
   const [invoiceTax, setInvoiceTax] = useState<number>(0);
+  const [manualRoundOff, setManualRoundOff] = useState<number | null>(null);
 
   // Live Invoice Preview Modal
   const [previewModalOpen, setPreviewModalOpen] = useState(false);
@@ -176,6 +178,9 @@ export const InvoiceCreateView: React.FC<InvoiceCreateViewProps> = ({
         ? existingInvoice.tax
         : (existingInvoice.cgst + existingInvoice.sgst + existingInvoice.igst || 0);
       setInvoiceTax(existingTax);
+      if (existingInvoice.roundOff !== undefined) {
+        setManualRoundOff(existingInvoice.roundOff);
+      }
       if (existingInvoice.customerId && existingInvoice.customerId !== 'draft_pending') {
         setSelectedCustomerId(existingInvoice.customerId);
       }
@@ -296,16 +301,21 @@ export const InvoiceCreateView: React.FC<InvoiceCreateViewProps> = ({
     const shipping = showShipping ? Math.max(0, Number(invoiceShipping) || 0) : 0;
 
     // Subtotal - Discount + Tax + Shipping
-    const preRoundTotal = Math.max(0, Math.round((subtotal - discount + tax + shipping) * 100) / 100);
+    const calculatedTotal = Math.max(0, Math.round((subtotal - discount + tax + shipping) * 100) / 100);
 
-    const autoRound = invoiceSettings.autoRoundOff !== false && companySettings.enableRoundOff !== false;
-    let roundOff = 0;
-    let grandTotal = preRoundTotal;
+    // Auto round off calculation:
+    // Round Off = Rounded Total - Calculated Total
+    // Grand Total = Calculated Total + Round Off
+    const autoRoundedTotal = Math.round(calculatedTotal);
+    const autoRoundOff = Math.round((autoRoundedTotal - calculatedTotal) * 100) / 100;
 
-    if (autoRound) {
-      grandTotal = Math.round(preRoundTotal);
-      roundOff = Math.round((grandTotal - preRoundTotal) * 100) / 100;
-    }
+    // Effective round off: uses user manual override if set, otherwise automatically calculated
+    const effectiveRoundOff = (manualRoundOff !== null && !isNaN(manualRoundOff))
+      ? manualRoundOff
+      : autoRoundOff;
+
+    const grandTotal = Math.max(0, Math.round((calculatedTotal + effectiveRoundOff) * 100) / 100);
+    const roundOff = Math.round(effectiveRoundOff * 100) / 100;
 
     const taxableAmount = Math.max(0, Math.round((subtotal - discount) * 100) / 100);
 
@@ -326,11 +336,10 @@ export const InvoiceCreateView: React.FC<InvoiceCreateViewProps> = ({
     invoiceDiscount,
     invoiceTax,
     invoiceShipping,
+    manualRoundOff,
     showDiscount,
     showShipping,
     showGst,
-    invoiceSettings.autoRoundOff,
-    companySettings.enableRoundOff,
   ]);
 
   // Quick Customer Creation
@@ -1150,12 +1159,38 @@ export const InvoiceCreateView: React.FC<InvoiceCreateViewProps> = ({
                   </div>
                 )}
 
-                {showRoundOff && totals.roundOff !== 0 && (
-                  <div className="flex justify-between items-center text-slate-400 pt-2">
-                    <span>Round Off:</span>
-                    <span className="font-semibold text-slate-300">
-                      {totals.roundOff < 0 ? `-${formatCurrency(Math.abs(totals.roundOff))}` : formatCurrency(totals.roundOff)}
-                    </span>
+                {/* Round Off field (automatically calculated, editable if manual override desired) */}
+                {showRoundOff && (
+                  <div className="pt-2 flex justify-between items-center gap-2">
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-slate-300 font-semibold">Round Off (₹):</span>
+                      {manualRoundOff !== null && (
+                        <button
+                          type="button"
+                          onClick={() => setManualRoundOff(null)}
+                          className="text-[10px] text-amber-400 hover:text-amber-300 underline cursor-pointer"
+                          title="Reset to automatic calculation"
+                        >
+                          (auto)
+                        </button>
+                      )}
+                    </div>
+                    <div className="w-32">
+                      <input
+                        type="number"
+                        step="0.01"
+                        value={manualRoundOff !== null ? manualRoundOff : totals.roundOff}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          if (val === '') {
+                            setManualRoundOff(null);
+                          } else {
+                            setManualRoundOff(parseFloat(val) || 0);
+                          }
+                        }}
+                        className="w-full px-2.5 py-1.5 bg-slate-800 border border-slate-700 rounded-lg text-xs font-bold text-white text-right focus:ring-2 focus:ring-amber-500 focus:outline-none"
+                      />
+                    </div>
                   </div>
                 )}
 
@@ -1481,60 +1516,118 @@ export const InvoiceCreateView: React.FC<InvoiceCreateViewProps> = ({
               </table>
             </div>
 
-            {/* Invoice Financial Summary Box */}
-            <div className="flex justify-end pt-3 border-t border-slate-200">
-              <div className="w-full sm:w-72 space-y-2 text-xs">
+            {/* Bottom Details & Totals Summary */}
+            <div className="grid grid-cols-1 sm:grid-cols-12 gap-8 pt-4 border-t border-slate-200">
+              {/* Payment Details, Bank Details, and Terms (Left: 7 cols) */}
+              <div className="sm:col-span-7 space-y-4">
+                <div className="p-4 bg-slate-50/80 rounded-2xl border border-slate-200/80 grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+                  <div>
+                    <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">
+                      Bank Transfer Details
+                    </p>
+                    <p className="font-semibold text-slate-800">{companySettings.bankName}</p>
+                    <p className="text-slate-600">A/C: <span className="font-mono font-medium text-slate-900">{companySettings.accountNumber}</span></p>
+                    <p className="text-slate-600">IFSC: <span className="font-mono font-medium text-slate-900">{companySettings.ifsc}</span></p>
+                    {companySettings.branch && <p className="text-slate-600">Branch: {companySettings.branch}</p>}
+                  </div>
+
+                  {companySettings.upiId && (
+                    <div className="text-left sm:text-right border-t sm:border-t-0 sm:border-l border-slate-200 pt-3 sm:pt-0 sm:pl-4">
+                      <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">
+                        Instant UPI Payment
+                      </p>
+                      <div className="w-16 h-16 bg-white border border-slate-300 rounded-lg mx-0 sm:ml-auto flex items-center justify-center p-1 shadow-xs">
+                        <div className="w-full h-full bg-slate-900 flex flex-col items-center justify-center text-white rounded-xs">
+                          <QrCode className="w-10 h-10" />
+                        </div>
+                      </div>
+                      <p className="text-[10px] font-mono text-slate-600 mt-1">{companySettings.upiId}</p>
+                    </div>
+                  )}
+                </div>
+
+                <div className="text-xs text-slate-600 italic">
+                  <strong>Amount in words:</strong> {numberToWordsIndian(totals.grandTotal)}
+                </div>
+
+                {/* Terms and conditions */}
+                {(terms || companySettings.termsAndConditions) && (
+                  <div className="text-[11px] text-slate-500">
+                    <strong className="block text-slate-700 font-semibold mb-0.5">Terms &amp; Conditions:</strong>
+                    <p className="whitespace-pre-line leading-relaxed">{terms || companySettings.termsAndConditions}</p>
+                  </div>
+                )}
+              </div>
+
+              {/* Invoice Financial Summary (Right: 5 cols) */}
+              <div className="sm:col-span-5 space-y-2 text-xs">
                 <div className="pb-1 border-b border-slate-200">
                   <span className="text-xs font-bold uppercase tracking-wider text-slate-900">
                     Invoice Financial Summary
                   </span>
                 </div>
-                <div className="flex justify-between text-slate-600">
+                <div className="flex justify-between py-1 border-b border-slate-100 text-slate-600">
                   <span>Subtotal</span>
                   <span className="font-semibold text-slate-900">{formatCurrency(totals.subtotal)}</span>
                 </div>
                 {showDiscount && totals.discount > 0 && (
-                  <div className="flex justify-between text-amber-600 font-semibold">
+                  <div className="flex justify-between py-1 border-b border-slate-100 text-amber-600">
                     <span>Discount</span>
-                    <span>-{formatCurrency(totals.discount)}</span>
+                    <span className="font-semibold">-{formatCurrency(totals.discount)}</span>
                   </div>
                 )}
                 {showTax && totals.tax > 0 && (
-                  <div className="flex justify-between text-slate-700 font-semibold">
+                  <div className="flex justify-between py-1 border-b border-slate-100 text-slate-700">
                     <span>Tax</span>
-                    <span>{formatCurrency(totals.tax)}</span>
+                    <span className="font-semibold">{formatCurrency(totals.tax)}</span>
                   </div>
                 )}
                 {showShipping && totals.shipping > 0 && (
-                  <div className="flex justify-between text-slate-700 font-semibold">
+                  <div className="flex justify-between py-1 border-b border-slate-100 text-slate-700">
                     <span>Shipping</span>
-                    <span>{formatCurrency(totals.shipping)}</span>
+                    <span className="font-semibold">{formatCurrency(totals.shipping)}</span>
                   </div>
                 )}
                 {showRoundOff && (
-                  <div className="flex justify-between text-slate-500 font-semibold">
+                  <div className="flex justify-between py-1 border-b border-slate-100 text-slate-500">
                     <span>Round Off</span>
-                    <span>
-                      {totals.roundOff < 0 ? `-${formatCurrency(Math.abs(totals.roundOff))}` : formatCurrency(totals.roundOff || 0)}
+                    <span className="font-semibold">
+                      {totals.roundOff < 0 ? `-${formatCurrency(Math.abs(totals.roundOff))}` : (totals.roundOff > 0 ? `+${formatCurrency(totals.roundOff)}` : formatCurrency(0))}
                     </span>
                   </div>
                 )}
-                <div className="flex justify-between text-base font-black text-slate-900 pt-2 border-t-2 border-slate-900">
+                <div className="flex justify-between py-2 border-b-2 border-slate-900 text-sm font-black text-slate-950">
                   <span>Grand Total</span>
-                  <span className="text-amber-600 font-black">{formatCurrency(totals.grandTotal)}</span>
+                  <span className="text-base text-slate-900">{formatCurrency(totals.grandTotal)}</span>
                 </div>
-                {showPaid && (
-                  <div className="flex justify-between text-xs font-semibold text-emerald-700 pt-1">
+                {showPaid && (recordInitialPayment && initialPaymentAmount > 0) && (
+                  <div className="flex justify-between py-1 text-emerald-700">
                     <span>Paid</span>
-                    <span>{formatCurrency(recordInitialPayment ? Number(initialPaymentAmount) || 0 : 0)}</span>
+                    <span className="font-semibold">{formatCurrency(Number(initialPaymentAmount) || 0)}</span>
                   </div>
                 )}
                 {showBalanceDue && (
-                  <div className="flex justify-between text-xs font-semibold text-rose-600 pt-1">
+                  <div className="flex justify-between py-1 text-slate-900 font-bold bg-amber-50 px-2 rounded-lg">
                     <span>Balance Due</span>
                     <span>{formatCurrency(Math.max(0, totals.grandTotal - (recordInitialPayment ? Number(initialPaymentAmount) || 0 : 0)))}</span>
                   </div>
                 )}
+              </div>
+            </div>
+
+            {/* Signatory Footer */}
+            <div className="pt-8 flex flex-col sm:flex-row justify-between items-start sm:items-end gap-6 text-xs border-t border-slate-100">
+              <div>
+                <p><strong>Created By:</strong> {getUserDisplayName(currentUser)}</p>
+                <p className="font-bold text-slate-900 mt-0.5">
+                  Invoice Prepared By: <span className="bg-amber-100 text-amber-950 px-1.5 py-0.5 rounded font-black">{getUserDisplayName(currentUser)}</span>
+                </p>
+              </div>
+              <div className="text-left sm:text-right">
+                <p className="text-slate-600">For <strong>{companySettings.companyName}</strong></p>
+                <div className="mt-8 border-t border-slate-300 pt-1 text-[10px] text-slate-500">
+                  Authorized Signatory
+                </div>
               </div>
             </div>
           </div>

@@ -271,6 +271,7 @@ export interface InvoiceSettings {
   showGst?: boolean; // Default true (Show)
   showTax?: boolean; // Default true (Show)
   showRoundOff?: boolean; // Default true (Show)
+  autoRoundOff?: boolean; // Default true (Auto compute round off)
   showPaid?: boolean; // Default true (Show)
   showBalanceDue?: boolean; // Default true (Show)
   showCgst?: boolean; // Sub-control for CGST
